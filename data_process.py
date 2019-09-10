@@ -1,17 +1,19 @@
 import nibabel as nib
 import numpy as np
+import os, glob
+
 
 def load_file(path):
     """
     Load a volume file to memory
     Args:
-        datafile:
-
+        path(string):
+            path to the file, needs to be of '.nii', '.nii.gz' or '.npz' format only
     Returns:
         numpy array of the volume in float 64 format
     """
 
-    if path.endswith(('.nii', '.nii.gz', '.mgz')):
+    if path.endswith(('.nii', '.nii.gz')):
         image = nib.load(path).get_data()
 
     elif path.endswith('.npz'):
@@ -26,17 +28,22 @@ def dataset_generator(paths, batch_size=1):
 
     while True:
         random_indcies = np.random.randint(len(paths), size=batch_size)
-        batch_data = []
+        batch_data = np.array([])
 
-        for i in random_indcies:
-            volume = load_file(paths[i])
-            volume = volume[np.newaxis, ..., np.newaxis]
-            batch_data.append(volume)
 
-        if batch_size > 1:
-            return_vals = [np.concatenate(batch_data, 0)]
-        else:
-            return_vals = [batch_data[0]]
+        for i in range(len(random_indcies)):
+
+
+            volume = load_file(paths[random_indcies[i]])
+            volume = volume[np.newaxis, np.newaxis, ...]
+
+            if i == 0:
+                batch_data = volume
+            else:
+                batch_data = np.append(batch_data, volume, axis=0)
+
+
+
 
         # # also return segmentations
         # if return_segs:
@@ -50,4 +57,17 @@ def dataset_generator(paths, batch_size=1):
         #         return_vals.append(np.concatenate(X_data, 0))
         #     else:
         #         return_vals.append(X_data[0])
-        yield tuple(return_vals)
+        yield batch_data
+
+
+def network_input(data_dir, split_tet=(0.8, 0.1, 0.1), batch_size=1):
+
+    # create a list of files from the folder
+    glob_paths = glob.glob("")
+    for ext in ('*.nii', '*.nii.gz', '.npz'):
+        glob_paths.extend(glob.glob(os.path.join(data_dir, ext)))
+    paths = list(glob_paths)
+
+    generator = dataset_generator(paths, batch_size)
+    while True:
+       yield next(generator)

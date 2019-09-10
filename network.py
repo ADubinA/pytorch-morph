@@ -15,18 +15,18 @@ class VoxelMorph1(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.conv_layer_down1 = self.single_conv(2, 16)
+        self.conv_layer_down1 = self.single_conv(1, 16)
         self.conv_layer_down2 = self.single_conv(16, 32)
         self.conv_layer_down32 = self.single_conv(32, 32)
 
 
         self.maxpool = nn.MaxPool3d(2)
-        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.upsample = nn.Upsample(scale_factor=2, mode='trilinear', align_corners=True)
 
-        self.conv_layer_up32 = self.single_conv(32 + 32, 32 + 32)
-        self.conv_layer_up1 = self.single_conv(32+32, 8)
-        self.conv_layer_up2 = self.single_conv(8+8, 8)
-        self.conv_layer_up3 = self.single_conv(8, 3)
+        self.conv_layer_up32 = self.single_conv(32 + 32, 32)
+        self.conv_layer_up1 = self.single_conv(32, 8)
+        self.conv_layer_up2 = self.single_conv(8, 8)
+        self.conv_layer_up3 = self.single_conv(8+16, 3)
 
         # self.conv_last = nn.Conv2d(64, n_class, 1)
 
@@ -43,14 +43,14 @@ class VoxelMorph1(nn.Module):
         conv3 = self.conv_layer_down32(x)
         x = self.maxpool(conv3)
 
-        # 4: from 32 to 32 of scale 1/8
+        # # 4: from 32 to 32 of scale 1/8
         conv4 = self.conv_layer_down32(x)
         x = self.maxpool(conv4)
 
         # 5: from 32 to 32 of scale 1/16 ---- middle layer
         x = self.conv_layer_down32(x)
 
-        # 6: from 32+32 to 32 of scale 1/8
+        # # 6: from 32+32 to 32 of scale 1/8
         x = self.upsample(x)
         x = torch.cat((x, conv4), dim=1)
         x = self.conv_layer_up32(x)
@@ -68,15 +68,14 @@ class VoxelMorph1(nn.Module):
         # 9: from 32 to 8 of scale 1/2
         x = self.conv_layer_up1(x)
 
-        # 10: from 8 to 8 of scale 1
+        # # 10: from 8 to 8 of scale 1
         x = self.upsample(x)
-        x = torch.cat((x, conv3), dim=1)
+        # x = torch.cat((x, conv3), dim=1)
         x = self.conv_layer_up2(x)
 
         # 11: from 8+8 to 3 of scale 1
-        x = self.upsample(x)
-        x = torch.cat((x, conv3), dim=1)
-        out = self.conv_layer_up2(x)
+        x = torch.cat((x, conv1), dim=1)
+        out = self.conv_layer_up3(x)
 
         return out
     @staticmethod
@@ -104,7 +103,8 @@ class BilinearSTNRegistrator(nn.Module):
 
         """
         super(BilinearSTNRegistrator, self).__init__()
-        self.atlas = atlas
+
+        self.atlas = torch.from_numpy(atlas).float()
         self.localization_net = VoxelMorph1()
 
     def forward(self, x):
@@ -116,6 +116,7 @@ class BilinearSTNRegistrator(nn.Module):
         Returns:
 
         """
+        x = torch.from_numpy(x).float()
         vector_map = self.localization_net(torch.cat((self.atlas, x)))
 
         warped_image = F.grid_sample(input=x, grid=vector_map)
