@@ -2,11 +2,13 @@ from skimage import exposure
 import numpy as np
 import matplotlib.pyplot as plt
 import os, glob
+from data_process import load_file
+# import dicom2nifti
+# import dicom2nifti.settings as settings
 
-import dicom2nifti
-import dicom2nifti.settings as settings
+import nibabel as nib
 # import ants
-settings.disable_validate_slice_increment()
+# settings.disable_validate_slice_increment()
 
 
 def equalize_volume(volume):
@@ -123,6 +125,7 @@ def format_pet_ct_data(input_folder, output_folder):
 
 
 if __name__ == '__main__':
-    create_base_folders(r"D:\head-neck-pet-ct\Head-Neck-PET-CT", r"D:\head-neck-ordered")
-    format_pet_ct_data(r"D:\head-neck-pet-ct\Head-Neck-PET-CT", r"D:\head-neck-ordered")
+    # create_base_folders(r"D:\head-neck-pet-ct\Head-Neck-PET-CT", r"D:\head-neck-ordered")
+    # format_pet_ct_data(r"D:\head-neck-pet-ct\Head-Neck-PET-CT", r"D:\head-neck-ordered")
+    image = load_file(r"D:\head-neck-pet-ct\Head-Neck-PET-CT\HN-CHUM-001\08-27-1885-PANC._avec_C.A._SPHRE_ORL___tte_et_cou__-TP-74220\1-RTstructCTsim-CTPET-CT-45294\000000.dcm")
     pass
