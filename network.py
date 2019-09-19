@@ -190,12 +190,13 @@ class BilinearSTNRegistrator(nn.Module):
         2. creating are transformation function. This could be affine, b-slin
     """
 
-    def __init__(self, atlas):
+    def __init__(self, atlas, device=None):
         """
 
         Args:
             atlas:
                 numpy array of size
+            using_cuda(bool)
 
         """
         super(BilinearSTNRegistrator, self).__init__()
@@ -207,6 +208,13 @@ class BilinearSTNRegistrator(nn.Module):
 
         self.localization_net = Type1Module()
 
+        # set default device if needed
+        if device is None:
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = device
+        # apply the device
+        self.localization_net.to(device)
+        self.atlas = self.atlas.to(device)
     def forward(self, x):
         """
         forward pass of the Bilinear STN registation using the atlas given in the constructor
@@ -216,7 +224,10 @@ class BilinearSTNRegistrator(nn.Module):
         Returns:
 
         """
-        vector_map = self.localization_net(torch.cat((self.atlas, x)))
+        x = x.to(self.device)
+        localization_input = torch.cat((self.atlas, x))
+        # localization_input = localization_input.to(self.device)
+        vector_map = self.localization_net(localization_input)
 
         warped_image = F.grid_sample(input=x, grid=vector_map)
 
