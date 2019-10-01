@@ -41,3 +41,14 @@ def MSE_loss(outputs, atlas):
     loss = pixel_loss
     return loss
 
+def grad(vector_fields):
+    """
+    calculate the gradiant size of the vector fields
+    Args:
+        vector_fields:
+            torch tensor of the form (batch_size, dims)
+    Returns :
+        torch tensor of size (batch_size, grad_size)
+    """
+    for d in vector_fields.shape[1:]:
+        dim_slice = vector_fields[:,]
