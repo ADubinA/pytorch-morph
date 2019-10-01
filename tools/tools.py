@@ -38,3 +38,41 @@ def save_string(save_dir, epoch):
     filename = t + "_epoch-" + str(epoch)+".pt"
     path = os.path.join(save_dir, filename)
     return path
+
+
+def roll(tensor, dim, shift=1, fill_pad=None):
+    """
+    numpy roll implementation. referenced from
+    https://discuss.pytorch.org/t/implementation-of-function-like-numpy-roll/964/7
+
+    Args:
+        tensor:
+        dim:
+        shift:
+        fill_pad:
+
+    Returns:
+
+    """
+    if 0 == shift:
+        return tensor
+
+    elif shift < 0:
+        shift = -shift
+        gap = tensor.index_select(dim, torch.arange(shift))
+        if fill_pad is not None:
+            gap = fill_pad * torch.ones_like(gap, device=tensor.device)
+        return torch.cat([tensor.index_select(dim, torch.arange(shift, tensor.size(dim))), gap], dim=dim)
+
+    else:
+        shift = tensor.size(dim) - shift
+        gap = tensor.index_select(dim, torch.arange(shift, tensor.size(dim)))
+        if fill_pad is not None:
+            gap = fill_pad * torch.ones_like(gap, device=tensor.device)
+        return torch.cat([gap, tensor.index_select(dim, torch.arange(shift))], dim=dim)
+
+
+if __name__ == "__main__":
+    t = torch.arange(27*2).view(2,3,3,3)
+    print(t)
+    print(roll(t,dim=1))

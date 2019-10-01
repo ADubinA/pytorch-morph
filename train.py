@@ -24,7 +24,7 @@ def train(atlas_path, train_dir, save_dir, split_tet=(0.8, 0.1, 0.1),
     for epoch in tqdm(range(epochs)):
         for i in range(images_per_epoch):
             batch_data = next(dataset_gen)
-            outputs = net(batch_data)[0]
+            outputs = net(batch_data)
             loss = criterion(outputs, net.atlas)
             loss.backward()
             optimizer.step()
