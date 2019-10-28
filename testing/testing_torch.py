@@ -36,7 +36,16 @@ def test_grad():
     s = t+1
     assert (grad(t) - grad(s)).bool().all()
 
+def test_sum():
+    t = torch.FloatTensor([[[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                            [[1, 2, 3], [4, 5, 6], [7, 8, 9]]],
 
+                           [[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                            [[1, 2, 3], [4, 5, 6], [7, 8, -9]]]]
+                          )
+    print((t*t).sum())
 # t = t.repeat(2,4)
 # print(t)
 
@@ -57,4 +66,4 @@ def test_grad():
 # print(z.shape)
 
 if __name__ == "__main__":
-    test_grad()
+    test_sum()

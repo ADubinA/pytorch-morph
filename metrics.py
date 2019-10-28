@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 from tools.tools import batch_duplication
 import numpy as np
-def loss_fn(outputs, atlas):
+def loss_mse_with_grad(outputs, atlas):
     """
     Calculate the Cross correlation loss, with added regularization of differentiability.
     from An Unsupervised Learning Model for Deformable Medical Image Registration
@@ -19,8 +19,9 @@ def loss_fn(outputs, atlas):
     """
     penalty = 'l1'
     volumes = outputs[0]
+    batch_size = volumes.shape[0]
     vector_fields = outputs[1]
-    atlas = batch_duplication(atlas, volumes.shape[0])
+    atlas = batch_duplication(atlas, batch_size)
 
     # calculate pixel loss using MSE
     pixel_loss = nn.MSELoss().forward(volumes, atlas)
@@ -29,11 +30,13 @@ def loss_fn(outputs, atlas):
     gradiants = grad(vector_fields=vector_fields)
 
     if penalty == 'l1':
-        df = [torch.abs(f).sum() for f in gradiants]
+        loss = gradiants.abs().sum()
     else:
         assert penalty == 'l2', 'penalty can only be l1 or l2. Got: %s' % penalty
-        df = [(f * f).sum() for f in gradiants]
-    return df.sum() / len(df)
+        loss = (gradiants*gradiants).sum()
+
+    # normalize the loss by the batch size
+    return loss/ batch_size
 
 def MSE_loss(outputs, atlas):
     """

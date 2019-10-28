@@ -2,7 +2,7 @@ from network import *
 from data_process import *
 import metrics
 import torch.optim as optim
-from metrics import loss_fn
+from metrics import *
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import tools.tools as tools
@@ -15,10 +15,10 @@ def train(atlas_path, train_dir, save_dir, split_tet=(0.8, 0.1, 0.1),
 
     atlas = load_file_for_stn(atlas_path)
     net = BilinearSTNRegistrator(atlas)
-    net.cuda()
+    # net.cuda()
     dataset_gen = network_input(train_dir, split_tet, batch_size)
     optimizer = optim.Adam(net.parameters(), lr=learning_rate)
-    criterion = metrics.MSE_loss
+    criterion = metrics.loss_mse_with_grad
 
     running_loss = 0.0
     for epoch in tqdm(range(epochs)):

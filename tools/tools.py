@@ -1,7 +1,7 @@
 import torch
 import os
 import time
-
+import torch.nn.functional as F
 
 def batch_duplication(tensor, batch_size):
     # tensor = tensor.unsqueeze(0)
@@ -72,7 +72,28 @@ def roll(tensor, dim, shift=1, fill_pad=None):
         return torch.cat([gap, tensor.index_select(dim, torch.arange(shift))], dim=dim)
 
 
+def shift_volume(tensor, shift=2, dim=0, constant=0):
+
+    assert dim >= 0 & dim < 3
+
+    if shift == 0:
+        return tensor
+
+    if shift>0:
+        dim = dim *2 -2
+    else:
+        dim = dim *2 -1
+
+    # 2 for starting padding, and 3 for dimension of the volume
+    pad = [0]*2*3
+    pad[dim] = shift
+    raise NotImplementedError("torch didn't implement this when I wrote this :(")
+    padded = F.pad(tensor, pad, constant)
+    return padded
+
+def shift_numpy_volume(array,shift,dim,constant=0):
+    raise NotImplementedError()
 if __name__ == "__main__":
-    t = torch.arange(27*2).view(2,3,3,3)
+    t = torch.arange(27).view(1,3,3,3,1)
     print(t)
-    print(roll(t,dim=1))
+    print(shift_volume(t))

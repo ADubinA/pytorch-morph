@@ -1,11 +1,12 @@
 import numpy as np
-from vispy import app, scene
-from multivol import MultiVolume
-from multivol import get_translucent_cmap
-from vispy import io, plot as vp
+# from vispy import app, scene
+# from multivol import MultiVolume
+# from multivol import get_translucent_cmap
+# from vispy import io, plot as vp
 import matplotlib.pyplot as plt
+from matplotlib.patheffects import withStroke
 import math
-import mayavi.mlab as mlab
+# import mayavi.mlab as mlab
 
 def threshold(data, data_min, data_max):
     data[data > data_max] = 0
@@ -160,6 +161,45 @@ def show_vector_field(volume):
     src = mlab.pipeline.vector_field(u, v, w)
     mlab.pipeline.vectors(src, mask_points=20, scale_factor=3.)
 
+def plt_2d_vector_field(vector_field, slice, dim=0, save_location=None):
+    """
+    drawing a 2d vector field generated from the net
+    Args:
+        vector_field: (numpy ndarray)
+            the vector field, must have shape of the form (x,y,z,3)
+        slice: (int)
+            slice location for the vector field
+        dim:(int)
+            dimension index for slicing
+        save_location: (string)
+            full location for saving the image. if None, will use plt.show()
+
+
+    Returns:
+        None
+    """
+    # Set limits and number of points in grid
+    y, x = np.mgrid[10:-10:100j, 10:-10:100j]
+
+    x_obstacle, y_obstacle = 5, 5
+    alpha_obstacle, a_obstacle, b_obstacle = -1.0, 1e3, 2e3
+
+    p = -alpha_obstacle * np.exp(-((x - x_obstacle) ** 2 / a_obstacle
+                                   + (y - y_obstacle) ** 2 / b_obstacle))
+    dy, dx = np.gradient(p)
+
+    fig, ax = plt.subplots()
+
+    ax.streamplot(x, y, dx, dy, linewidth=500 * np.hypot(dx, dy),
+                  color=p, density=1.2, cmap='gist_earth')
+
+    cont = ax.contour(x, y, p, cmap='gist_earth', vmin=p.min(), vmax=p.max())
+    labels = ax.clabel(cont)
+
+    plt.setp(labels, path_effects=[withStroke(linewidth=8, foreground='w')])
+
+    ax.set(aspect=1, title='Streamplot with contours')
+    plt.show()
 
 def show_histogram(volume):
     plt.hist(volume.flatten(), bins='auto')  # arguments are passed to np.histogram
