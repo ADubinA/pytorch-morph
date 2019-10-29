@@ -161,13 +161,49 @@ def show_vector_field(volume):
     src = mlab.pipeline.vector_field(u, v, w)
     mlab.pipeline.vectors(src, mask_points=20, scale_factor=3.)
 
-def plt_2d_vector_field(vector_field, slice, dim=0, save_location=None):
+def create_result(atlas,original, warped, vector_field, save_location):
+
+    slice_index = 15
+    dim = 2
+
+    original = original[0, :, :, :].cpu().detach().numpy()
+    warped = warped[0, :, :, :].cpu().detach().numpy()
+    atlas = atlas[0,0, :, :, :].cpu().detach().numpy()
+
+    slicer = [slice(None)]*3
+    slicer[dim] = slice_index
+
+    original = original[slicer]
+    warped = warped[slicer]
+    atlas = atlas[slicer]
+
+    fig, axs = plt.subplots(1, 4, figsize=(9, 3), sharex=True)
+    axs[0].imshow(original)
+    axs[0].title.set_text("original image")
+
+    axs[1].imshow(atlas)
+    axs[1].title.set_text("atlas")
+    axs[2].imshow(warped)
+    axs[2].title.set_text("warped image")
+
+
+    plt_2d_vector_field_tensor(vector_field,slice_index,dim,None,axs[3])
+    axs[3].title.set_text("vector field")
+
+    fig.savefig(save_location)
+
+def plt_2d_vector_field_tensor(vector_field, slicing_index, dim=0, save_location=None,ax=None):
+    vector_field = vector_field.cpu()
+    vector_field = vector_field.detach().numpy()
+    return plt_2d_vector_field(vector_field,slicing_index,dim,save_location,ax=ax)
+
+def plt_2d_vector_field(vector_field, slicing_index, dim=0, save_location=None, skip_resolution=1,ax=None):
     """
     drawing a 2d vector field generated from the net
     Args:
         vector_field: (numpy ndarray)
             the vector field, must have shape of the form (x,y,z,3)
-        slice: (int)
+        slicing_index: (int)
             slice location for the vector field
         dim:(int)
             dimension index for slicing
@@ -178,28 +214,56 @@ def plt_2d_vector_field(vector_field, slice, dim=0, save_location=None):
     Returns:
         None
     """
-    # Set limits and number of points in grid
-    y, x = np.mgrid[10:-10:100j, 10:-10:100j]
+    vector_field = vector_field
 
-    x_obstacle, y_obstacle = 5, 5
-    alpha_obstacle, a_obstacle, b_obstacle = -1.0, 1e3, 2e3
+    # remove the slicing dim
+    dims = [0,1,2]
+    dims.pop(dim)
+    # create a grid for plt
+    x_grid = np.arange(0, vector_field.shape[dims[1]])
+    y_grid = np.arange(0, vector_field.shape[dims[0]])
+    # y_grid, x_grid = np.meshgrid(x_grid, y_grid) # yes, x and y are in different order here
+    if ax is None:
+        fig0, ax = plt.subplots()
 
-    p = -alpha_obstacle * np.exp(-((x - x_obstacle) ** 2 / a_obstacle
-                                   + (y - y_obstacle) ** 2 / b_obstacle))
-    dy, dx = np.gradient(p)
+    # set slicing parameters
+    slicer = [slice(None)]*4
+    slicer[dim] = slicing_index
 
-    fig, ax = plt.subplots()
+    # slice the vector field on the right dim
+    flat_vector_field = vector_field[slicer]
+    # reshape from (shape,3) to (3, shape)
+    flat_vector_field = flat_vector_field.reshape([3]+list(flat_vector_field.shape)[:-1])
+    x = flat_vector_field[dims[0]]
+    y = flat_vector_field[dims[1]]
 
-    ax.streamplot(x, y, dx, dy, linewidth=500 * np.hypot(dx, dy),
-                  color=p, density=1.2, cmap='gist_earth')
+    # q = ax0.quiver(x_grid, y_grid, x, y)
 
-    cont = ax.contour(x, y, p, cmap='gist_earth', vmin=p.min(), vmax=p.max())
-    labels = ax.clabel(cont)
 
-    plt.setp(labels, path_effects=[withStroke(linewidth=8, foreground='w')])
-
-    ax.set(aspect=1, title='Streamplot with contours')
-    plt.show()
+    ax.set_title("pivot='tip'; scales with x view")
+    # M = np.hypot(x[:: skip_resolution, :: skip_resolution], y[:: skip_resolution, :: skip_resolution])
+    q = ax.quiver(x_grid[:: skip_resolution],
+                   y_grid[::skip_resolution],
+                   x[:: skip_resolution, :: skip_resolution],
+                   y[:: skip_resolution, :: skip_resolution])
+                   # M,
+                   # units='x', pivot='tip', width=0.022, scale=1 / 0.15)
+    ax.quiverkey(q, X=0.3, Y=1.1, U=10,
+                 label='Quiver key, length = 10', labelpos='E')
+    # ax0.scatter(x_grid, y_grid, color='0.5', s=1)
+    # # , color=x
+    # strm = ax0.streamplot(x_grid, y_grid, x, y, linewidth=2, cmap=plt.cm.autumn)
+    # fig0.colorbar(strm.lines)
+    #
+    # fig1, (ax1, ax2) = plt.subplots(ncols=2)
+    # ax1.streamplot(x_grid, y_grid, x, y, density=[0.5, 1])
+    #
+    # lw = 1 #5 * speed / speed.max()
+    # ax2.streamplot(x_grid, y_grid, x, y, density=0.6, color='k', linewidth=lw)
+    if save_location is None:
+        return
+    else:
+        plt.savefig(save_location)
 
 def show_histogram(volume):
     plt.hist(volume.flatten(), bins='auto')  # arguments are passed to np.histogram

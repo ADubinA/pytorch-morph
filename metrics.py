@@ -30,13 +30,14 @@ def loss_mse_with_grad(outputs, atlas):
     gradiants = grad(vector_fields=vector_fields)
 
     if penalty == 'l1':
-        loss = gradiants.abs().sum()
+        grad_loss = gradiants.abs().sum()
     else:
         assert penalty == 'l2', 'penalty can only be l1 or l2. Got: %s' % penalty
-        loss = (gradiants*gradiants).sum()
+        grad_loss = (gradiants*gradiants).sum()
 
+    loss = pixel_loss + grad_loss
     # normalize the loss by the batch size
-    return loss/ batch_size
+    return loss / batch_size
 
 def MSE_loss(outputs, atlas):
     """
@@ -72,7 +73,7 @@ def grad(vector_fields):
         torch tensor of size (batch_size, grad_size)
     """
     vol_shape = vector_fields.shape[1:-1]
-    gradiants = torch.tensor([])
+    gradiants = torch.tensor([], requires_grad=True, device=vector_fields.device)
 
     for vector_field in vector_fields:
         # slice in every dim except batch dim and final dim (x,y,z)

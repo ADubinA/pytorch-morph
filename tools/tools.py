@@ -23,7 +23,7 @@ def set_path(path, is_folder=True):
     if not os.path.isdir(path):
         os.mkdir(path)
 
-def save_string(save_dir, epoch):
+def save_model_string(save_dir, epoch):
     """
     returns a string for the model save name.
     Args:
@@ -34,8 +34,18 @@ def save_string(save_dir, epoch):
     Returns(string):
         the proper file name with prefix
     """
-    t =  time.strftime("%Y%m%d-%H%M%S")
-    filename = t + "_epoch-" + str(epoch)+".pt"
+    path = save_string(save_dir, epoch)
+    return path + ".pt"
+
+
+def save_sample_string(save_dir, epoch):
+    path = save_string(save_dir, epoch)
+    return path + ".jpg"
+
+
+def save_string(save_dir, epoch):
+    time_sign = time.strftime("%Y%m%d-%H%M%S")
+    filename = time_sign + "_epoch-" + str(epoch)+".pt"
     path = os.path.join(save_dir, filename)
     return path
 
