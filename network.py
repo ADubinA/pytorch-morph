@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-
+import testing.debug_tools as debug_tools
+import tools.tools as tools
 # class VoxelMorph1(nn.Module):
 #     """
 #     This is the Unet used by An Unsupervised Learning Model for
@@ -107,7 +108,9 @@ class Type1Module(nn.Module):
         self.conv_layer_up32 = self.single_conv(32 + 32, 32)
         self.conv_layer_up1 = self.single_conv(32, 8)
         self.conv_layer_up2 = self.single_conv(8, 8)
-        self.conv_layer_up3 = self.single_conv(8 + 16, 3)
+
+        # no relu at the end
+        self.conv_layer_up3 = nn.Conv3d(in_channels=8 + 16, out_channels=3, kernel_size=3, padding=1)
 
         # self.conv_last = nn.Conv2d(64, n_class, 1)
 
@@ -168,8 +171,10 @@ class Type1Module(nn.Module):
         # 11: from 8+8 to 3 of scale 1
         x = torch.cat((x, conv1), dim=1)
         out = self.conv_layer_up3(x)
+        out = 2 * torch.sigmoid(out) - 1
 
-        out = out.view(input_shape[0]-1,input_shape[2],input_shape[3],input_shape[4],3)
+        out = out.permute(0,2,3,4,1)
+        # out = out.view(input_shape[0]-1, input_shape[2], input_shape[3], input_shape[4], 3)
         return out
 
     @staticmethod
@@ -215,6 +220,7 @@ class BilinearSTNRegistrator(nn.Module):
         # apply the device
         self.localization_net.to(device)
         self.atlas = self.atlas.to(device)
+        self.unit_gird = tools.create_unit_grid(atlas.shape[2:]).to(device)
     def forward(self, x):
         """
         forward pass of the Bilinear STN registation using the atlas given in the constructor
@@ -227,9 +233,10 @@ class BilinearSTNRegistrator(nn.Module):
         x = x.to(self.device)
         localization_input = torch.cat((self.atlas, x))
         # localization_input = localization_input.to(self.device)
-        vector_map = self.localization_net(localization_input)
-
-        warped_image = F.grid_sample(input=x, grid=vector_map)
+        vector_map = self.localization_net(localization_input) + self.unit_gird
+        # vector_map = debug_tools.create_unit_grid(x.shape[2:])
+        # vector_map = vector_map.to(self.device)
+        warped_image = F.grid_sample(input=x, grid=vector_map,mode="nearest")
 
         return (warped_image, vector_map)
 

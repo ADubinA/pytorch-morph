@@ -1,6 +1,7 @@
 import torch
 import os
 import time
+import numpy as np
 import torch.nn.functional as F
 
 def batch_duplication(tensor, batch_size):
@@ -43,67 +44,50 @@ def save_sample_string(save_dir, epoch):
     return path + ".jpg"
 
 
+
 def save_string(save_dir, epoch):
     time_sign = time.strftime("%Y%m%d-%H%M%S")
-    filename = time_sign + "_epoch-" + str(epoch)+".pt"
+    filename = time_sign + "_epoch-" + str(epoch)
     path = os.path.join(save_dir, filename)
     return path
 
 
-def roll(tensor, dim, shift=1, fill_pad=None):
-    """
-    numpy roll implementation. referenced from
-    https://discuss.pytorch.org/t/implementation-of-function-like-numpy-roll/964/7
+def create_unit_grid(shape):
+    # make sure that the shape is not a weird torch.Shape
+    if type(shape) is torch.Size:
+        shape = [int(s) for s in shape]
 
-    Args:
-        tensor:
-        dim:
-        shift:
-        fill_pad:
+    # set the final shape and the new tensor (dimx,dimy,..., num_of_dims)
+    new_shape = list(shape)
+    new_shape.insert(0, len(new_shape))
+    new_shape = tuple(new_shape)
+    tensor = torch.zeros(new_shape)
 
-    Returns:
+    shifted_dim = [2,1,0]
 
-    """
-    if 0 == shift:
-        return tensor
+    for dim in range(len(shape)):
+        a = np.arange(-1, stop=1, step=2 / shape[dim])
 
-    elif shift < 0:
-        shift = -shift
-        gap = tensor.index_select(dim, torch.arange(shift))
-        if fill_pad is not None:
-            gap = fill_pad * torch.ones_like(gap, device=tensor.device)
-        return torch.cat([tensor.index_select(dim, torch.arange(shift, tensor.size(dim))), gap], dim=dim)
+        # tile on the other dimensions
+        lshape = list(shape)
+        lshape.pop(dim)
+        lshape.append(1)  # this means that var a should be tiled once on it's dimension
+        a = np.tile(a, tuple(lshape))
 
-    else:
-        shift = tensor.size(dim) - shift
-        gap = tensor.index_select(dim, torch.arange(shift, tensor.size(dim)))
-        if fill_pad is not None:
-            gap = fill_pad * torch.ones_like(gap, device=tensor.device)
-        return torch.cat([gap, tensor.index_select(dim, torch.arange(shift))], dim=dim)
+        # transpose to the right shape
+        dims = list(range(len(shape)))
+        dims.pop(-1)
+        dims.insert(dim, len(shape)-1)
+        a = a.transpose(tuple(dims))
+        tensor[shifted_dim[dim]] = torch.tensor(a)
+
+    # permute = list(range(len(new_shape)))
+    # permute.insert(len(new_shape),permute.pop(0))
+    # tensor = tensor.permute(tuple(permute))
+    tensor = tensor.permute((1,2,3,0))
+    tensor = tensor[None, :, :, :, :]
+    return tensor
 
 
-def shift_volume(tensor, shift=2, dim=0, constant=0):
-
-    assert dim >= 0 & dim < 3
-
-    if shift == 0:
-        return tensor
-
-    if shift>0:
-        dim = dim *2 -2
-    else:
-        dim = dim *2 -1
-
-    # 2 for starting padding, and 3 for dimension of the volume
-    pad = [0]*2*3
-    pad[dim] = shift
-    raise NotImplementedError("torch didn't implement this when I wrote this :(")
-    padded = F.pad(tensor, pad, constant)
-    return padded
-
-def shift_numpy_volume(array,shift,dim,constant=0):
-    raise NotImplementedError()
 if __name__ == "__main__":
-    t = torch.arange(27).view(1,3,3,3,1)
-    print(t)
-    print(shift_volume(t))
+    pass

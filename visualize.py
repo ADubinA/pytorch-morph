@@ -7,7 +7,9 @@ import matplotlib.pyplot as plt
 from matplotlib.patheffects import withStroke
 import math
 # import mayavi.mlab as mlab
-
+import tools.tools as tools
+import torch
+import matplotlib
 def threshold(data, data_min, data_max):
     data[data > data_max] = 0
     data[data < data_min] = 0
@@ -163,6 +165,7 @@ def show_vector_field(volume):
 
 def create_result(atlas,original, warped, vector_field, save_location):
 
+    matplotlib.use('Agg')
     slice_index = 15
     dim = 2
 
@@ -178,26 +181,37 @@ def create_result(atlas,original, warped, vector_field, save_location):
     atlas = atlas[slicer]
 
     fig, axs = plt.subplots(1, 4, figsize=(9, 3), sharex=True)
-    axs[0].imshow(original)
+    im = axs[0].imshow(original)
+    plt.colorbar(im, ax=axs[0])
     axs[0].title.set_text("original image")
 
-    axs[1].imshow(atlas)
+    im = axs[1].imshow(atlas)
+    plt.colorbar(im, ax=axs[1])
     axs[1].title.set_text("atlas")
-    axs[2].imshow(warped)
+
+    im = axs[2].imshow(warped)
     axs[2].title.set_text("warped image")
+    plt.colorbar(im, ax=axs[2])
 
-
+    # vector_field = vector_field.cpu().detach().numpy()
+    # slicer = [slice(None)]*4
+    # slicer[dim] = slice_index
+    # vector_field = 1000*vector_field[slicer]
+    # im = axs[3].imshow(vector_field)
+    # plt.colorbar(im, ax=axs[3])
     plt_2d_vector_field_tensor(vector_field,slice_index,dim,None,axs[3])
     axs[3].title.set_text("vector field")
 
     fig.savefig(save_location)
+    matplotlib.use('Qt5Agg')
+
 
 def plt_2d_vector_field_tensor(vector_field, slicing_index, dim=0, save_location=None,ax=None):
     vector_field = vector_field.cpu()
     vector_field = vector_field.detach().numpy()
     return plt_2d_vector_field(vector_field,slicing_index,dim,save_location,ax=ax)
 
-def plt_2d_vector_field(vector_field, slicing_index, dim=0, save_location=None, skip_resolution=1,ax=None):
+def plt_2d_vector_field(vector_field, slicing_index, dim=0, save_location=None, skip_resolution=10,ax=None):
     """
     drawing a 2d vector field generated from the net
     Args:
@@ -214,16 +228,20 @@ def plt_2d_vector_field(vector_field, slicing_index, dim=0, save_location=None, 
     Returns:
         None
     """
-    vector_field = vector_field
 
     # remove the slicing dim
     dims = [0,1,2]
     dims.pop(dim)
+
+    unit_grid = tools.create_unit_grid(vector_field.shape[:-1])
+    unit_grid =  unit_grid.numpy()[0]
+    vector_field = unit_grid- vector_field
     # create a grid for plt
     x_grid = np.arange(0, vector_field.shape[dims[1]])
     y_grid = np.arange(0, vector_field.shape[dims[0]])
     # y_grid, x_grid = np.meshgrid(x_grid, y_grid) # yes, x and y are in different order here
     if ax is None:
+        matplotlib.use('Qt5Agg')
         fig0, ax = plt.subplots()
 
     # set slicing parameters
@@ -234,21 +252,19 @@ def plt_2d_vector_field(vector_field, slicing_index, dim=0, save_location=None, 
     flat_vector_field = vector_field[slicer]
     # reshape from (shape,3) to (3, shape)
     flat_vector_field = flat_vector_field.reshape([3]+list(flat_vector_field.shape)[:-1])
-    x = flat_vector_field[dims[0]]
-    y = flat_vector_field[dims[1]]
+    x = flat_vector_field[dims[0]]*100
+    y = flat_vector_field[dims[1]]*100
 
     # q = ax0.quiver(x_grid, y_grid, x, y)
 
 
     ax.set_title("pivot='tip'; scales with x view")
-    # M = np.hypot(x[:: skip_resolution, :: skip_resolution], y[:: skip_resolution, :: skip_resolution])
     q = ax.quiver(x_grid[:: skip_resolution],
                    y_grid[::skip_resolution],
                    x[:: skip_resolution, :: skip_resolution],
-                   y[:: skip_resolution, :: skip_resolution])
-                   # M,
-                   # units='x', pivot='tip', width=0.022, scale=1 / 0.15)
-    ax.quiverkey(q, X=0.3, Y=1.1, U=10,
+                   y[:: skip_resolution, :: skip_resolution],
+                   units='dots', pivot='tip', width=1, scale=1)
+    ax.quiverkey(q, X=0.9, Y=0.9, U=1,
                  label='Quiver key, length = 10', labelpos='E')
     # ax0.scatter(x_grid, y_grid, color='0.5', s=1)
     # # , color=x
@@ -271,12 +287,32 @@ def show_histogram(volume):
     plt.title("Histogram with 'auto' bins")
     plt.show()
 
+def imshow_grid(deformation_field,dim =2,slicing_index = 15, ax=None):
+    # slicer = [slice(None)]*5
+    # slicer[dim] = slicing_index
+    grid_size = (5,5)
+    shape = np.array([128,128])  # deformation_field[0,:,:,slicing_index,0:2].shape
+    line = grid_size[0]*np.array([0])
+    line = np.append(line,[1])
+
+    shape = np.ceil(shape/len(line)).astype(int)
+    tile = np.tile(line, (grid_size[1],shape[1]))
+
+    tile = np.append(tile,(grid_size[0]+1)*np.array([1]))
+
+    tile = np.tile(tile,(shape[0],1))
+    plt.imshow(tile)
+    plt.show()
+    pass
+
 if __name__ == '__main__':
-    vol0 = np.load(r"D:/LIDC-IDRI_npz_small/0.npz")['arr_0']
-    vol1 = np.load(r"D:/LIDC-IDRI_npz_small/1.npz")['arr_0']
+    # vol0 = np.load(r"D:/LIDC-IDRI_npz_small/0.npz")['arr_0']
+    # vol1 = np.load(r"D:/LIDC-IDRI_npz_small/1.npz")['arr_0']
     # vol1 = np.load(r"D:/output.npz")['arr_0']
     # vol1 = np.load(io.load_data_file(r"D:/small_register/0_moved.npz"))['arr_0']
     #show_merge_3d(vol0[:16,:,:],vol1, 1500)
     # show_difference_2d(vol0[:16,:,:], vol1,slice_dim=0 ,jump=1)
-    show_two_2d(vol0[:16,:,:], vol1,5)
+    # show_two_2d(vol0[:16,:,:], vol1,5)
     # show_histogram(vol0)
+
+    imshow_grid(None)

@@ -1,8 +1,8 @@
 import torch.nn as nn
 import torch
-from tools.tools import batch_duplication
+from tools.tools import batch_duplication, create_unit_grid
 import numpy as np
-def loss_mse_with_grad(outputs, atlas):
+def loss_mse_with_grad(outputs, atlas, grad_coef=0.00001):
     """
     Calculate the Cross correlation loss, with added regularization of differentiability.
     from An Unsupervised Learning Model for Deformable Medical Image Registration
@@ -24,18 +24,22 @@ def loss_mse_with_grad(outputs, atlas):
     atlas = batch_duplication(atlas, batch_size)
 
     # calculate pixel loss using MSE
-    pixel_loss = nn.MSELoss().forward(volumes, atlas)
+    pixel_loss = 100*nn.MSELoss().forward(volumes, atlas)
 
     # calucate the gradiants
-    gradiants = grad(vector_fields=vector_fields)
+    unit_grid = create_unit_grid(vector_fields.shape[1:-1]).to(vector_fields.device)
+    gradiants = (unit_grid-vector_fields).abs().sum()# grad(vector_fields=vector_fields)
 
     if penalty == 'l1':
-        grad_loss = gradiants.abs().sum()
+        grad_loss = grad_coef*gradiants.abs().sum()
     else:
         assert penalty == 'l2', 'penalty can only be l1 or l2. Got: %s' % penalty
-        grad_loss = (gradiants*gradiants).sum()
+        grad_loss = grad_coef*(gradiants*gradiants).sum()
 
     loss = pixel_loss + grad_loss
+
+    print("pixel loss {}, grad loss {}, total loss {}".format(pixel_loss, grad_loss, loss))
+
     # normalize the loss by the batch size
     return loss / batch_size
 
@@ -86,6 +90,13 @@ def grad(vector_fields):
             # slice that take the first element of the dim
             slicer2 = [slice(None)]*(len(vol_shape) + 1)
             slicer2[i] = slice(None, -1, None)
+
+            # adding a zero element to fix dimension issues
+            part_grad = vector_field[slicer1] - vector_field[slicer2]
+            slicer1[i] = slice(1, 2, None)
+            zero = torch.zeros_like(vector_field[slicer1])
+            part_grad = torch.cat((zero, part_grad),i)
+            # part_grad
             # permute dimensions to put the ith dimension first
-            torch.cat((gradiants,vector_field[slicer1] - vector_field[slicer2]))
+            gradiants = torch.cat((gradiants,part_grad))
     return gradiants
