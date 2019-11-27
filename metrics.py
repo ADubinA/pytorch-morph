@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 from tools.tools import batch_duplication, create_unit_grid
 import numpy as np
-def loss_mse_with_grad(outputs, atlas, grad_coef=0.00001):
+def loss_mse_with_grad(outputs, atlas, grad_coef=0.00001, pixel_coef=1000):
     """
     Calculate the Cross correlation loss, with added regularization of differentiability.
     from An Unsupervised Learning Model for Deformable Medical Image Registration
@@ -17,6 +17,7 @@ def loss_mse_with_grad(outputs, atlas, grad_coef=0.00001):
     Returns (float):
         nn loss function
     """
+    grad_coef=0
     penalty = 'l1'
     volumes = outputs[0]
     batch_size = volumes.shape[0]
@@ -24,7 +25,7 @@ def loss_mse_with_grad(outputs, atlas, grad_coef=0.00001):
     atlas = batch_duplication(atlas, batch_size)
 
     # calculate pixel loss using MSE
-    pixel_loss = 100*nn.MSELoss().forward(volumes, atlas)
+    pixel_loss = pixel_coef * nn.MSELoss().forward(volumes, atlas)
 
     # calucate the gradiants
     unit_grid = create_unit_grid(vector_fields.shape[1:-1]).to(vector_fields.device)
@@ -59,9 +60,9 @@ def MSE_loss(outputs, atlas):
         nn loss function
     """
     atlas = batch_duplication(atlas, outputs[0].shape[0])
-    pixel_loss = nn.MSELoss().forward(outputs[0], atlas)
+    pixel_loss = nn.MSELoss()(outputs[0], atlas[0])
     # differential_loss =
-    loss = pixel_loss
+    loss = pixel_loss[None,...]
     return loss
 
 

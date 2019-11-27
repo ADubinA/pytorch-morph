@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 def batch_duplication(tensor, batch_size):
     # tensor = tensor.unsqueeze(0)
-    return torch.cat(list(tensor for _ in range(batch_size)))
+    return torch.stack(list(tensor for _ in range(batch_size)))
 
 def set_path(path, is_folder=True):
     """

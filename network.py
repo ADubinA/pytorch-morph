@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 import numpy as np
 import testing.debug_tools as debug_tools
 import tools.tools as tools
@@ -100,12 +101,17 @@ class Type1Module(nn.Module):
 
         self.conv_layer_down1 = self.single_conv(1, 16)
         self.conv_layer_down2 = self.single_conv(16, 32)
+        self.conv_layer_down31 = self.single_conv(32, 32)
         self.conv_layer_down32 = self.single_conv(32, 32)
+        self.conv_layer_down33 = self.single_conv(32, 32)
 
         self.maxpool = nn.MaxPool3d(2)
         self.upsample = nn.Upsample(scale_factor=2, mode='trilinear', align_corners=True)
 
+        self.conv_layer_up33 = self.single_conv(32 + 32, 32)
         self.conv_layer_up32 = self.single_conv(32 + 32, 32)
+        self.conv_layer_up31 = self.single_conv(32 + 32, 32)
+
         self.conv_layer_up1 = self.single_conv(32, 8)
         self.conv_layer_up2 = self.single_conv(8, 8)
 
@@ -113,6 +119,12 @@ class Type1Module(nn.Module):
         self.conv_layer_up3 = nn.Conv3d(in_channels=8 + 16, out_channels=3, kernel_size=3, padding=1)
 
         # self.conv_last = nn.Conv2d(64, n_class, 1)
+        def init_normal(m):
+            if type(m) == nn.Conv3d:
+                nn.init.uniform_(m.weight)
+
+        # use the modules apply function to recursively apply the initialization
+        self.apply(init_normal)
 
     def forward(self, x):
         input_shape = x.shape
@@ -129,7 +141,7 @@ class Type1Module(nn.Module):
 
 
         # 3: from 32 to 32 of scale 1/4
-        conv3 = self.conv_layer_down32(x)
+        conv3 = self.conv_layer_down31(x)
         x = self.maxpool(conv3)
         conv3 = conv3[1:,...]  # remove atlas so skip connection will work proper
 
@@ -140,7 +152,7 @@ class Type1Module(nn.Module):
         conv4 = conv4[1:,...]  # remove atlas so skip connection will work proper
 
         # 5: from 32 to 32 of scale 1/16 ---- middle layer
-        x = self.conv_layer_down32(x)
+        x = self.conv_layer_down33(x)
 
         # add course atlas to course batch
         x = x[1:,...] + x[0]
@@ -148,7 +160,7 @@ class Type1Module(nn.Module):
         # # 6: from 32+32 to 32 of scale 1/8
         x = self.upsample(x)
         x = torch.cat((x, conv4), dim=1)
-        x = self.conv_layer_up32(x)
+        x = self.conv_layer_up33(x)
 
         # 7: from 32+32 to 32 of scale 1/4
         x = self.upsample(x)
@@ -158,7 +170,7 @@ class Type1Module(nn.Module):
         # 8: from 32+32 to 32 of scale 1/2
         x = self.upsample(x)
         x = torch.cat((x, conv2), dim=1)
-        x = self.conv_layer_up32(x)
+        x = self.conv_layer_up31(x)
 
         # 9: from 32 to 8 of scale 1/2
         x = self.conv_layer_up1(x)
@@ -171,7 +183,7 @@ class Type1Module(nn.Module):
         # 11: from 8+8 to 3 of scale 1
         x = torch.cat((x, conv1), dim=1)
         out = self.conv_layer_up3(x)
-        out = 2 * torch.sigmoid(out) - 1
+        # out = 2 * torch.sigmoid(out) - 1
 
         out = out.permute(0,2,3,4,1)
         # out = out.view(input_shape[0]-1, input_shape[2], input_shape[3], input_shape[4], 3)
@@ -181,7 +193,7 @@ class Type1Module(nn.Module):
     def single_conv(in_channels, out_channels):
         return nn.Sequential(
             nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=False),
             # nn.Conv3d(out_channels, out_channels, self.num_channels, padding=1),
             # nn.ReLU(inplace=True)
         )
@@ -210,6 +222,8 @@ class BilinearSTNRegistrator(nn.Module):
             self.atlas = torch.from_numpy(atlas)
         else:
             self.atlas = atlas
+        self.atlas = self.atlas.to(device)
+        self.atlas = Variable(self.atlas, requires_grad=True)
 
         self.localization_net = Type1Module()
 
@@ -219,7 +233,6 @@ class BilinearSTNRegistrator(nn.Module):
         self.device = device
         # apply the device
         self.localization_net.to(device)
-        self.atlas = self.atlas.to(device)
         self.unit_gird = tools.create_unit_grid(atlas.shape[2:]).to(device)
     def forward(self, x):
         """
@@ -230,13 +243,12 @@ class BilinearSTNRegistrator(nn.Module):
         Returns:
 
         """
-        x = x.to(self.device)
         localization_input = torch.cat((self.atlas, x))
         # localization_input = localization_input.to(self.device)
         vector_map = self.localization_net(localization_input) + self.unit_gird
-        # vector_map = debug_tools.create_unit_grid(x.shape[2:])
+        # vector_map = tools.create_unit_grid(x.shape[2:])
         # vector_map = vector_map.to(self.device)
-        warped_image = F.grid_sample(input=x, grid=vector_map,mode="nearest")
+        warped_image = F.grid_sample(input=x, grid=vector_map,mode="nearest", padding_mode="reflection")
 
         return (warped_image, vector_map)
 

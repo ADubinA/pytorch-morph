@@ -8,6 +8,7 @@ from matplotlib.patheffects import withStroke
 import math
 # import mayavi.mlab as mlab
 import tools.tools as tools
+from torch.nn.functional import grid_sample
 import torch
 import matplotlib
 def threshold(data, data_min, data_max):
@@ -169,6 +170,7 @@ def create_result(atlas,original, warped, vector_field, save_location):
     slice_index = 15
     dim = 2
 
+
     original = original[0, :, :, :].cpu().detach().numpy()
     warped = warped[0, :, :, :].cpu().detach().numpy()
     atlas = atlas[0,0, :, :, :].cpu().detach().numpy()
@@ -180,7 +182,7 @@ def create_result(atlas,original, warped, vector_field, save_location):
     warped = warped[slicer]
     atlas = atlas[slicer]
 
-    fig, axs = plt.subplots(1, 4, figsize=(9, 3), sharex=True)
+    fig, axs = plt.subplots(1, 4, figsize=(15, 5))
     im = axs[0].imshow(original)
     plt.colorbar(im, ax=axs[0])
     axs[0].title.set_text("original image")
@@ -193,16 +195,19 @@ def create_result(atlas,original, warped, vector_field, save_location):
     axs[2].title.set_text("warped image")
     plt.colorbar(im, ax=axs[2])
 
+    axs[3].imshow(warped)
+    plot_grid(vector_field.cpu().detach().numpy(), slice_index, 2-dim, None, ax=axs[3])
+    axs[3].title.set_text("vector field")
+
+    fig.savefig(save_location)
+
     # vector_field = vector_field.cpu().detach().numpy()
     # slicer = [slice(None)]*4
     # slicer[dim] = slice_index
     # vector_field = 1000*vector_field[slicer]
     # im = axs[3].imshow(vector_field)
     # plt.colorbar(im, ax=axs[3])
-    plt_2d_vector_field_tensor(vector_field,slice_index,dim,None,axs[3])
-    axs[3].title.set_text("vector field")
 
-    fig.savefig(save_location)
     matplotlib.use('Qt5Agg')
 
 
@@ -211,7 +216,7 @@ def plt_2d_vector_field_tensor(vector_field, slicing_index, dim=0, save_location
     vector_field = vector_field.detach().numpy()
     return plt_2d_vector_field(vector_field,slicing_index,dim,save_location,ax=ax)
 
-def plt_2d_vector_field(vector_field, slicing_index, dim=0, save_location=None, skip_resolution=10,ax=None):
+def plt_2d_vector_field(vector_field, slicing_index, dim=0, save_location=None, skip_resolution=15,ax=None):
     """
     drawing a 2d vector field generated from the net
     Args:
@@ -235,7 +240,10 @@ def plt_2d_vector_field(vector_field, slicing_index, dim=0, save_location=None, 
 
     unit_grid = tools.create_unit_grid(vector_field.shape[:-1])
     unit_grid =  unit_grid.numpy()[0]
-    vector_field = unit_grid- vector_field
+    vector_field = vector_field - unit_grid
+
+    for i in range(vector_field.shape[-1]):
+        vector_field[:,...,i] = vector_field[:,...,i] * vector_field.shape[i]
     # create a grid for plt
     x_grid = np.arange(0, vector_field.shape[dims[1]])
     y_grid = np.arange(0, vector_field.shape[dims[0]])
@@ -250,21 +258,24 @@ def plt_2d_vector_field(vector_field, slicing_index, dim=0, save_location=None, 
 
     # slice the vector field on the right dim
     flat_vector_field = vector_field[slicer]
+
     # reshape from (shape,3) to (3, shape)
     flat_vector_field = flat_vector_field.reshape([3]+list(flat_vector_field.shape)[:-1])
-    x = flat_vector_field[dims[0]]*100
-    y = flat_vector_field[dims[1]]*100
+    x = flat_vector_field[dims[0]]
+    y = flat_vector_field[dims[1]]
 
     # q = ax0.quiver(x_grid, y_grid, x, y)
 
 
     ax.set_title("pivot='tip'; scales with x view")
+    plt.grid()
+
     q = ax.quiver(x_grid[:: skip_resolution],
                    y_grid[::skip_resolution],
                    x[:: skip_resolution, :: skip_resolution],
                    y[:: skip_resolution, :: skip_resolution],
                    units='dots', pivot='tip', width=1, scale=1)
-    ax.quiverkey(q, X=0.9, Y=0.9, U=1,
+    ax.quiverkey(q, X=1, Y=1, U=1,
                  label='Quiver key, length = 10', labelpos='E')
     # ax0.scatter(x_grid, y_grid, color='0.5', s=1)
     # # , color=x
@@ -280,6 +291,42 @@ def plt_2d_vector_field(vector_field, slicing_index, dim=0, save_location=None, 
         return
     else:
         plt.savefig(save_location)
+
+def plot_grid_helper(ax, gridx,gridy, **kwargs):
+    for i in range(gridx.shape[0]):
+        ax.plot(gridx[i,:], gridy[i,:], **kwargs)
+    for i in range(gridx.shape[1]):
+        ax.plot(gridx[:,i], gridy[:,i], **kwargs)
+
+def plot_grid(grid_3d, slicing_index, dim=0, save_location=None, skip_resolution=10,ax=None):
+    # remove the slicing dim
+    dims = [0,1,2]
+    dims.pop(dim)
+    # # set slicing parameters
+    slicer = [slice(None)]*4
+    slicer[dim] = slicing_index
+
+    # create a grid for plt
+    x_grid, y_grid = np.meshgrid(np.arange(0, grid_3d.shape[2-dims[0]]),np.arange(0, grid_3d.shape[2-dims[1]]))
+
+    if ax is None:
+        matplotlib.use('Qt5Agg')
+        fig0, ax = plt.subplots()
+
+    grid_3d = (grid_3d + 1)*0.5
+    for i in range(grid_3d.shape[-1]):
+        grid_3d[..., i] *= grid_3d.shape[i]
+
+
+    # slice the vector field on the right dim
+    flat_vector_field = grid_3d[slicer]
+    x = flat_vector_field[:, :, 2-dims[0]]
+    y = flat_vector_field[:, :, 2-dims[1]]
+
+    # plot_grid_helper(ax, x_grid, y_grid, color="lightblue")
+    plot_grid_helper(ax, x, y, color="C1")
+
+
 
 def show_histogram(volume):
     plt.hist(volume.flatten(), bins='auto')  # arguments are passed to np.histogram
