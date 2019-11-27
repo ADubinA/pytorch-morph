@@ -96,7 +96,7 @@ class Type1Module(nn.Module):
     aka Voxelmorph1
     """
 
-    def __init__(self):
+    def __init__(self, atlas, device=None):
         super().__init__()
 
         self.conv_layer_down1 = self.single_conv(1, 16)
@@ -126,8 +126,22 @@ class Type1Module(nn.Module):
         # use the modules apply function to recursively apply the initialization
         self.apply(init_normal)
 
+        if atlas.type is np.ndarray:
+            self.atlas = torch.from_numpy(atlas)
+        else:
+            self.atlas = atlas
+
+        # set default device if needed
+        if device is None:
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = device
+        self.atlas = self.atlas.to(device)
+        # apply the device
+        self.unit_gird = tools.create_unit_grid(atlas.shape[2:]).to(device)
+
     def forward(self, x):
-        input_shape = x.shape
+        original_image = x
+        x = torch.cat((self.atlas, x))
         # 1: from 2 to 16 of scale 1
         conv1 = self.conv_layer_down1(x)
         x = self.maxpool(conv1)
@@ -183,11 +197,13 @@ class Type1Module(nn.Module):
         # 11: from 8+8 to 3 of scale 1
         x = torch.cat((x, conv1), dim=1)
         out = self.conv_layer_up3(x)
-        # out = 2 * torch.sigmoid(out) - 1
-
+        out = 2 * torch.sigmoid(out) - 1
         out = out.permute(0,2,3,4,1)
-        # out = out.view(input_shape[0]-1, input_shape[2], input_shape[3], input_shape[4], 3)
-        return out
+
+        vector_map = out + self.unit_gird
+        warped_image = F.grid_sample(input=original_image, grid=vector_map)
+        return warped_image, vector_map
+
 
     @staticmethod
     def single_conv(in_channels, out_channels):
@@ -248,7 +264,7 @@ class BilinearSTNRegistrator(nn.Module):
         vector_map = self.localization_net(localization_input) + self.unit_gird
         # vector_map = tools.create_unit_grid(x.shape[2:])
         # vector_map = vector_map.to(self.device)
-        warped_image = F.grid_sample(input=x, grid=vector_map,mode="nearest", padding_mode="reflection")
+        warped_image = F.grid_sample(input=x, grid=vector_map, padding_mode="reflection")
 
         return (warped_image, vector_map)
 

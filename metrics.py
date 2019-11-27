@@ -22,24 +22,24 @@ def loss_mse_with_grad(outputs, atlas, grad_coef=0.00001, pixel_coef=1000):
     volumes = outputs[0]
     batch_size = volumes.shape[0]
     vector_fields = outputs[1]
-    atlas = batch_duplication(atlas, batch_size)
+    # atlas = batch_duplication(atlas, batch_size)
 
     # calculate pixel loss using MSE
     pixel_loss = pixel_coef * nn.MSELoss().forward(volumes, atlas)
 
-    # calucate the gradiants
-    unit_grid = create_unit_grid(vector_fields.shape[1:-1]).to(vector_fields.device)
-    gradiants = (unit_grid-vector_fields).abs().sum()# grad(vector_fields=vector_fields)
+    # # calucate the gradiants
+    # unit_grid = create_unit_grid(vector_fields.shape[1:-1]).to(vector_fields.device)
+    # gradiants = (unit_grid-vector_fields).abs().sum()# grad(vector_fields=vector_fields)
+    #
+    # if penalty == 'l1':
+    #     grad_loss = grad_coef*gradiants.abs().sum()
+    # else:
+    #     assert penalty == 'l2', 'penalty can only be l1 or l2. Got: %s' % penalty
+    #     grad_loss = grad_coef*(gradiants*gradiants).sum()
 
-    if penalty == 'l1':
-        grad_loss = grad_coef*gradiants.abs().sum()
-    else:
-        assert penalty == 'l2', 'penalty can only be l1 or l2. Got: %s' % penalty
-        grad_loss = grad_coef*(gradiants*gradiants).sum()
+    loss = pixel_loss #+ grad_loss
 
-    loss = pixel_loss + grad_loss
-
-    print("pixel loss {}, grad loss {}, total loss {}".format(pixel_loss, grad_loss, loss))
+    # print("pixel loss {}, grad loss {}, total loss {}".format(pixel_loss, grad_loss, loss))
 
     # normalize the loss by the batch size
     return loss / batch_size

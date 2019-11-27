@@ -2,6 +2,7 @@ import nibabel as nib
 import numpy as np
 import os, glob
 import torch
+from torch.autograd import Variable
 import pydicom
 def load_file(path, dict_key="arr_0"):
     """
@@ -77,8 +78,9 @@ def dataset_generator(paths, batch_size=1):
         yield batch_data
 
 
-def network_input(data_dir, split_tet=(0.8, 0.1, 0.1), batch_size=1):
-
+def network_input(data_dir, split_tet=(0.8, 0.1, 0.1), batch_size=1, device=None):
+    if device is None:
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # create a list of files from the folder
     glob_paths = glob.glob("")
     for ext in ('*.nii', '*.nii.gz', '.npz'):
@@ -87,4 +89,4 @@ def network_input(data_dir, split_tet=(0.8, 0.1, 0.1), batch_size=1):
 
     generator = dataset_generator(paths, batch_size)
     while True:
-       yield next(generator)
+       yield Variable(next(generator).to(device), requires_grad=True)
