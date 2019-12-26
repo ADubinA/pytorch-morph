@@ -11,6 +11,10 @@ import tools.tools as tools
 from torch.nn.functional import grid_sample
 import torch
 import matplotlib
+
+
+
+
 def threshold(data, data_min, data_max):
     data[data > data_max] = 0
     data[data < data_min] = 0
@@ -153,16 +157,6 @@ def show_merge_2d(volume0, volume1,slice_dim=0 ,jump=1, vol_min=-float("inf"),vo
             ax[i,j].imshow(img)
     plt.show()
 
-
-def show_vector_field(volume):
-    u = volume[..., 0]
-    v = volume[..., 1]
-    w = volume[..., 2]
-    # mlab.quiver3d(u, v, w)
-    # mlab.outline()
-    #
-    src = mlab.pipeline.vector_field(u, v, w)
-    mlab.pipeline.vectors(src, mask_points=20, scale_factor=3.)
 
 def create_result(atlas,original, warped, vector_field, save_location):
 

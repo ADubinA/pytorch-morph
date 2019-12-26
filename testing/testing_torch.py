@@ -3,7 +3,7 @@ import torch.nn as nn
 from tools.tools import batch_duplication
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-
+import tools.tools as tools
 
 def test_batch_duplication():
 
@@ -78,6 +78,7 @@ class Type1Module(nn.Module):
         # no relu at the end
         self.conv_layer_up3 = nn.Conv3d(in_channels=8 + 16, out_channels=3, kernel_size=3, padding=1)
         self.atlas = atlas.to(device)
+        self.unit_gird = tools.create_unit_grid(atlas.shape[2:]).to(device)
     def forward(self, x):
         original_image = x
         x = torch.cat((self.atlas, x))
@@ -137,7 +138,7 @@ class Type1Module(nn.Module):
         x = torch.cat((x, conv1), dim=1)
         out = self.conv_layer_up3(x)
         out = 2 * torch.sigmoid(out) - 1
-        vector_map = out.permute(0,2,3,4,1)
+        vector_map = out.permute(0,2,3,4,1) + self.unit_gird
 
 
         warped_image = F.grid_sample(input=original_image, grid=vector_map, padding_mode="reflection")
