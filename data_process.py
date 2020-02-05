@@ -32,7 +32,7 @@ def load_file(path, dict_key="arr_0"):
     return image.astype("float64")
 
 
-def load_file_for_stn(path):
+def load_file_for_stn(path, load_type="volume"):
     """
     Load a volume file to memory to be used by the STN
     Args:
@@ -41,7 +41,11 @@ def load_file_for_stn(path):
     Returns:
         numpy array of the volume in float 64 format
     """
-    numpy_file = load_file(path)[np.newaxis, np.newaxis, ...]
+    data = load_file(path)
+    if load_type == "volume":
+        data = data[:, ::-1, :]
+    numpy_file = data[np.newaxis, np.newaxis, ...]
+    numpy_file = numpy_file.copy()
     return torch.from_numpy(numpy_file).float()
 
 
@@ -73,7 +77,7 @@ def dataset_generator(paths, batch_size=1):
         yield batch_data
 
 
-def network_input(data_dir, split_tet=(0.8, 0.1, 0.1), batch_size=1, device=None):
+def network_input(data_dir, batch_size=1, device=None):
     if device is None:
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # create a list of files from the folder
@@ -84,10 +88,10 @@ def network_input(data_dir, split_tet=(0.8, 0.1, 0.1), batch_size=1, device=None
 
     generator = dataset_generator(paths, batch_size)
     while True:
-        yield Variable(next(generator).to(device), requires_grad=True)
+        yield Variable(next(generator).to(device), requires_grad=True)*0.001
 
 
-def ct_pet_data_generetor(folder_path, load_type, batch_size=1, load_labels=True, labels=[], data_type="ct"):
+def ct_pet_data_generator(folder_path, load_type, data_type="ct", load_labels=False, labels=[], batch_size=1):
     """
     Data loader and generator for the dataset head neck pet ct
     :param data_type: "ct" or "pet"
@@ -108,20 +112,29 @@ def ct_pet_data_generetor(folder_path, load_type, batch_size=1, load_labels=True
     train_list = [os.path.split(image_path)[-1].split(".")[0] for image_path in images_path]
     train_list = [image_name for image_name in train_list if image_name not in test_list]
     selected_data_names = train_list if load_type == "train" else test_list
-
-
     while True:
         random_indcies = np.random.randint(len(selected_data_names), size=batch_size)
         batch_data = np.array([])
         label_data_list = []
 
         for i in range(len(random_indcies)):
-            sample_name =selected_data_names[random_indcies[i]]
-            volume = load_file_for_stn(os.path.join(folder_path, data_type, sample_name + ".nii.gz"))
+            sample_name = selected_data_names[random_indcies[i]]
+            volume, labels_data = ct_pet_data_loader
+
             if i == 0:
                 batch_data = volume
             else:
                 batch_data = np.append(batch_data, volume, axis=0)
+
+            label_data_list.append(labels_data)
+
+        yield batch_data, label_data_list
+def ct_pet_data_loader(folder_path, data_type, sample_name, load_labels=False, labels=[]):
+
+
+            volume = load_file_for_stn(os.path.join(folder_path, data_type, sample_name + ".nii.gz"))
+            volume = volume * 0.001
+
 
             labels_paths = []
             labels_data = np.array([])
@@ -131,18 +144,20 @@ def ct_pet_data_generetor(folder_path, load_type, batch_size=1, load_labels=True
             elif len(labels) > 0 and load_labels:
                 for label in labels:
                     labels_paths.append(os.path.join(folder_path, "struct", sample_name, label + ".nii.gz"))
+
             for label_index in range(len(labels_paths)):
-                label = load_file_for_stn(labels_paths[label_index])
+                label = load_file_for_stn(labels_paths[label_index], load_type="label")
                 if label_index == 0:
                     labels_data = label
                 else:
                     labels_data = np.append(labels_data, label, axis=0)
 
-            label_data_list.append(labels_data)
+            return volume, labels_data
 
-        yield batch_data, label_data_list
+
+
 
 if __name__ == "__main__":
-    gen = ct_pet_data_generetor("/media/almog-lab/dataset/head-neck-ordered/", "train")
+    gen = ct_pet_data_generator("/media/almog-lab/dataset/head-neck-ordered/", "test", labels=["mask_BODY"])
     data = next(gen)
     print(data)

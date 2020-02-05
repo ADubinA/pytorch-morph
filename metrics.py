@@ -101,5 +101,11 @@ def grad(vector_fields):
             gradiants = torch.cat((gradiants,part_grad))
     return gradiants
 
+def dice_loss(y_true, y_pred):
+    top = 2 * (y_true * y_pred, [1, 2, 3]).sum()
+    bottom = torch.max((y_true + y_pred, [1, 2, 3]).sum(), 50)
+    dice = torch.mean(top / bottom)
+    return -dice
+
 if __name__ == "__main__":
     loss_ncc(0,0)
