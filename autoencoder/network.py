@@ -11,23 +11,25 @@ class AutoEncoderV1(nn.Module):
             nn.Conv3d(1, 16, kernel_size=3, padding=1),
             nn.ReLU(True),
             self.maxpool,
+
             nn.Conv3d(16, 32, kernel_size=3, padding=1),
             nn.ReLU(True),
             self.maxpool,
-            nn.Conv3d(32, 64, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            self.maxpool,
+
+            # nn.Conv3d(32, 64, kernel_size=3, padding=1),
+            # nn.ReLU(True),
+            # self.maxpool,
         )
         self.decoder = nn.Sequential(
-            self.upsample,
-            nn.Conv3d(64, 32, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            self.upsample,
+            # self.upsample,
+            # nn.Conv3d(64, 32, kernel_size=3, padding=1),
+            # nn.ReLU(True),
 
+            self.upsample,
             nn.Conv3d(32, 16, kernel_size=3, padding=1),
             nn.ReLU(True),
-            self.upsample,
 
+            self.upsample,
             nn.Conv3d(16, 1, kernel_size=3, padding=1),
         )
 

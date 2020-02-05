@@ -34,7 +34,7 @@ def train(train_dir, save_dir, sample_dir=None,tensorboard_dir=None, load_checko
 
     dataset_gen = network_input(train_dir, split_tet, batch_size)
     optimizer = optim.Adam(net.parameters(), lr=learning_rate)
-    criterion = ncc_loss
+    criterion = mse_loss
     # writer.add_graph(net,next(dataset_gen))
     # writer.close()
     running_loss = 0.0
@@ -68,12 +68,13 @@ def train(train_dir, save_dir, sample_dir=None,tensorboard_dir=None, load_checko
 
             writer.add_scalar("total loss",loss, global_step=epoch)
 
-            fig, (ax1, ax2) = plt.subplots(1, 2)
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
             ax1.set_title("after autoencoder")
             ax1.imshow(outputs[0,0,:,:,15].cpu().detach().numpy())
             ax2.set_title("original")
             ax2.imshow(batch_data[0,0,:,:,15].cpu().detach().numpy())
-
+            ax3.set_title("difference")
+            ax3.imshow((outputs-batch_data)[0,0,:,:,15].cpu().detach().numpy())
             fig.savefig(tools.save_sample_string(sample_dir,epoch))
 
         # save model after save_interval epochs
