@@ -112,14 +112,19 @@ def ct_pet_data_generator(folder_path, load_type, data_type="ct", load_labels=Fa
     train_list = [os.path.split(image_path)[-1].split(".")[0] for image_path in images_path]
     train_list = [image_name for image_name in train_list if image_name not in test_list]
     selected_data_names = train_list if load_type == "train" else test_list
+    sample_num = 0
     while True:
-        random_indcies = np.random.randint(len(selected_data_names), size=batch_size)
+        if load_type == "test":
+            random_indcies = np.array([sample_num])
+        else:
+            random_indcies = np.random.randint(len(selected_data_names), size=batch_size)
+
         batch_data = np.array([])
         label_data_list = []
 
         for i in range(len(random_indcies)):
             sample_name = selected_data_names[random_indcies[i]]
-            volume, labels_data = ct_pet_data_loader
+            volume, labels_data = ct_pet_data_loader(folder_path, data_type, sample_name, load_labels, labels)
 
             if i == 0:
                 batch_data = volume
@@ -129,6 +134,8 @@ def ct_pet_data_generator(folder_path, load_type, data_type="ct", load_labels=Fa
             label_data_list.append(labels_data)
 
         yield batch_data, label_data_list
+        sample_num += 1
+
 def ct_pet_data_loader(folder_path, data_type, sample_name, load_labels=False, labels=[]):
 
 

@@ -7,8 +7,8 @@ from tqdm import tqdm
 import tools.tools as tools
 from torch.autograd import Variable
 import visualize
-import testing.debug_tools as debug_tools
 from tensorboardX import SummaryWriter
+import torch.functional as F
 import skimage.transform
 import random
 import testing.testing_torch
@@ -16,6 +16,7 @@ import testing.testing_torch
 
 def test_model(model, atlas_name, test_path,  load_checkout_path=None):
     labels_for_testing = ["mask_BODY", "Brainstem", "Eye_(L)", "Brain"]
+
     if load_checkout_path is not None:
         model.load_state_dict(torch.load(load_checkout_path))
     gen = ct_pet_data_generator(test_path, "test", load_labels=True, labels=labels_for_testing)
@@ -23,7 +24,7 @@ def test_model(model, atlas_name, test_path,  load_checkout_path=None):
     for test_example_data, test_example_labels in gen:
         test_example_warped, test_example_grid = model(test_example_data)
         for test_example_label in test_example_labels:
-        F.grid_sample(input=original_image, grid=test_example_grid, padding_mode="zero")
+            warped_label = F.grid_sample(input=test_example_label, grid=test_example_grid, padding_mode="zero")
 
 
 
