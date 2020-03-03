@@ -4,6 +4,7 @@ import os, glob
 import torch
 from torch.autograd import Variable
 import pydicom
+import skimage.transform
 
 
 def load_file(path, dict_key="arr_0"):
@@ -44,54 +45,58 @@ def load_file_for_stn(path, load_type="volume"):
     data = load_file(path)
     if load_type == "volume":
         data = data[:, ::-1, :]
-    numpy_file = data[np.newaxis, np.newaxis, ...]
+    numpy_file = data[np.newaxis, np.newaxis, :, :, :80]
     numpy_file = numpy_file.copy()
+    numpy_file = skimage.transform.rescale(numpy_file, (1, 1,
+                                                        0.5, 0.5, 0.5))
+    numpy_file = numpy_file * 0.001
     return torch.from_numpy(numpy_file).float()
 
 
-def dataset_generator(paths, batch_size=1):
-    while True:
-        random_indcies = np.random.randint(len(paths), size=batch_size)
-        batch_data = np.array([])
-
-        for i in range(len(random_indcies)):
-
-            volume = load_file_for_stn(paths[random_indcies[i]])
-            if i == 0:
-                batch_data = volume
-            else:
-                batch_data = np.append(batch_data, volume, axis=0)
-
-        # # also return segmentations
-        # if return_segs:
-        #     X_data = []
-        #     for idx in idxes:
-        #         X_seg = load_volfile(vol_names[idx].replace('norm', 'aseg'))
-        #         X_seg = X_seg[np.newaxis, ..., np.newaxis]
-        #         X_data.append(X_seg)
-        #
-        #     if batch_size > 1:
-        #         return_vals.append(np.concatenate(X_data, 0))
-        #     else:
-        #         return_vals.append(X_data[0])
-        yield batch_data
-
-
-def network_input(data_dir, batch_size=1, device=None):
-    if device is None:
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # create a list of files from the folder
-    glob_paths = glob.glob("")
-    for ext in ('*.nii', '*.nii.gz', '.npz'):
-        glob_paths.extend(glob.glob(os.path.join(data_dir, ext)))
-    paths = list(glob_paths)
-
-    generator = dataset_generator(paths, batch_size)
-    while True:
-        yield Variable(next(generator).to(device), requires_grad=True)*0.001
+# def dataset_generator(paths, batch_size=1):
+#     while True:
+#         random_indcies = np.random.randint(len(paths), size=batch_size)
+#         batch_data = np.array([])
+#
+#         for i in range(len(random_indcies)):
+#
+#             volume = load_file_for_stn(paths[random_indcies[i]])
+#             if i == 0:
+#                 batch_data = volume
+#             else:
+#                 batch_data = np.append(batch_data, volume, axis=0)
+#
+#         # # also return segmentations
+#         # if return_segs:
+#         #     X_data = []
+#         #     for idx in idxes:
+#         #         X_seg = load_volfile(vol_names[idx].replace('norm', 'aseg'))
+#         #         X_seg = X_seg[np.newaxis, ..., np.newaxis]
+#         #         X_data.append(X_seg)
+#         #
+#         #     if batch_size > 1:
+#         #         return_vals.append(np.concatenate(X_data, 0))
+#         #     else:
+#         #         return_vals.append(X_data[0])
+#         yield batch_data
 
 
-def ct_pet_data_generator(folder_path, load_type, data_type="ct", load_labels=False, labels=[], batch_size=1):
+# def network_input(data_dir, batch_size=1, device=None):
+#     if device is None:
+#         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+#     # create a list of files from the folder
+#     glob_paths = glob.glob("")
+#     for ext in ('*.nii', '*.nii.gz', '.npz'):
+#         glob_paths.extend(glob.glob(os.path.join(data_dir, ext)))
+#     paths = list(glob_paths)
+#
+#     generator = dataset_generator(paths, batch_size)
+#     while True:
+#         yield Variable(next(generator).to(device), requires_grad=True)*0.001
+
+
+def ct_pet_data_generator(folder_path, load_type, data_type="ct",
+                          load_labels=False, labels=[], batch_size=1, device=None):
     """
     Data loader and generator for the dataset head neck pet ct
     :param data_type: "ct" or "pet"
@@ -124,7 +129,7 @@ def ct_pet_data_generator(folder_path, load_type, data_type="ct", load_labels=Fa
 
         for i in range(len(random_indcies)):
             sample_name = selected_data_names[random_indcies[i]]
-            volume, labels_data = ct_pet_data_loader(folder_path, data_type, sample_name, load_labels, labels)
+            volume, labels_data = ct_pet_data_loader(folder_path, data_type, sample_name, load_labels, labels, device)
 
             if i == 0:
                 batch_data = volume
@@ -132,34 +137,36 @@ def ct_pet_data_generator(folder_path, load_type, data_type="ct", load_labels=Fa
                 batch_data = np.append(batch_data, volume, axis=0)
 
             label_data_list.append(labels_data)
-
-        yield batch_data, label_data_list
+        if load_type == "test":
+            yield batch_data, label_data_list
+        else:
+            yield batch_data
         sample_num += 1
 
-def ct_pet_data_loader(folder_path, data_type, sample_name, load_labels=False, labels=[]):
+def ct_pet_data_loader(folder_path, data_type, sample_name, load_labels=False, labels=[], device=None):
+    if device is None:
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+    volume = load_file_for_stn(os.path.join(folder_path, data_type, sample_name + ".nii.gz"))
+    volume = volume.to(device)
 
-            volume = load_file_for_stn(os.path.join(folder_path, data_type, sample_name + ".nii.gz"))
-            volume = volume * 0.001
+    labels_paths = []
+    labels_data = {label: [] for label in labels}
 
+    if len(labels) == 0 and load_labels:
+        labels_paths = list(glob.glob(os.path.join(folder_path, "struct",
+                                                   sample_name, "*.nii.gz")))
+    elif len(labels) > 0 and load_labels:
+        for label in labels:
+            labels_paths.append(os.path.join(folder_path, "struct", sample_name, label + ".nii.gz"))
 
-            labels_paths = []
-            labels_data = np.array([])
-            if len(labels) == 0 and load_labels:
-                labels_paths = list(glob.glob(os.path.join(folder_path, "struct",
-                                                           sample_name, "*.nii.gz")))
-            elif len(labels) > 0 and load_labels:
-                for label in labels:
-                    labels_paths.append(os.path.join(folder_path, "struct", sample_name, label + ".nii.gz"))
+    for label_path in labels_paths:
+        label = load_file_for_stn(label_path, load_type="label")
+        label.to(device)
+        label_name = os.path.split(label_path)[-1].split(".")[0]
+        labels_data[label_name] = label
 
-            for label_index in range(len(labels_paths)):
-                label = load_file_for_stn(labels_paths[label_index], load_type="label")
-                if label_index == 0:
-                    labels_data = label
-                else:
-                    labels_data = np.append(labels_data, label, axis=0)
-
-            return volume, labels_data
+    return volume, labels_data
 
 
 

@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 from tools.tools import batch_duplication, create_unit_grid
+import autoencoder.voxelmorph_losses as vl
 import numpy as np
 import matplotlib.pyplot as plt
 def loss_mse_with_grad(outputs, atlas, grad_coef=0.001, pixel_coef=1000):
@@ -67,6 +68,15 @@ def MSE_loss(outputs, atlas):
     return loss
 
 
+def vl_loss(outputs, atlas):
+    volumes = outputs[0]
+    batch_size = volumes.shape[0]
+    vector_fields = outputs[1]
+    # atlas = batch_duplication(atlas, batch_size)
+    pixel_loss = vl.mse_loss(atlas, volumes)
+    gradient_loss = vl.gradient_loss(vector_fields)
+
+    return pixel_loss + gradient_loss
 def grad(vector_fields):
     """
     calculate the gradient size of the vector fields

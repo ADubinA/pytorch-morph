@@ -1,31 +1,40 @@
 from network import *
 from data_process import *
-import metrics
 import torch.optim as optim
 from metrics import *
 from tqdm import tqdm
 import tools.tools as tools
+import time
 from torch.autograd import Variable
 import visualize
 from tensorboardX import SummaryWriter
 import torch.functional as F
-import skimage.transform
+
 import random
 import testing.testing_torch
 # def test(atlas_path, test_dir, sample_dir=None, load_checkout_path=None, batch_size=1):
 
 def test_model(model, atlas_name, test_path,  load_checkout_path=None):
     labels_for_testing = ["mask_BODY", "Brainstem", "Eye_(L)", "Brain"]
-
+    result_dict = {label : [] for label in labels_for_testing}
     if load_checkout_path is not None:
         model.load_state_dict(torch.load(load_checkout_path))
     gen = ct_pet_data_generator(test_path, "test", load_labels=True, labels=labels_for_testing)
-    atlas_data, atlas_labels = ct_pet_data_loader(test_path, "test", atlas_name,load_labels=True, labels=labels_for_testing )
+    atlas_data, atlas_labels = ct_pet_data_loader(test_path, "test", atlas_name,
+                                                  load_labels=True, labels=labels_for_testing)
+
     for test_example_data, test_example_labels in gen:
         test_example_warped, test_example_grid = model(test_example_data)
-        for test_example_label in test_example_labels:
-            warped_label = F.grid_sample(input=test_example_label, grid=test_example_grid, padding_mode="zero")
 
+        for label_name, label_data in test_example_labels.items():
+            warped_label = F.grid_sample(input=label_data,
+                                         grid=test_example_grid, padding_mode="zero")
+            dice_score = dice_loss(atlas_labels[label_name], warped_label)
+            result_dict[label_name].append(dice_score)
+
+    result_dict = {label_name: np.mean(np.array(label_data)) for label_name, label_data in result_dict.items()}
+
+    return result_dict
 
 
 def train(atlas_path, train_dir, save_dir, sample_dir=None,tensorboard_dir=None, load_checkout_path=None,
@@ -42,16 +51,15 @@ def train(atlas_path, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
         tools.set_path(tensorboard_dir)
 
     atlas = load_file_for_stn(atlas_path)
-    # atlas = torch.tensor(skimage.transform.rescale(atlas,(1,1,0.5,0.5,0.5)))
     net = Type1Module(atlas, "cuda:0")
     net.cuda()
     net.train()
     if load_checkout_path is not None:
         net.load_state_dict(torch.load(load_checkout_path))
 
-    dataset_gen = network_input(train_dir, batch_size)
+    dataset_gen = ct_pet_data_generator(train_dir, "train")
     optimizer = optim.Adam(net.parameters(), lr=learning_rate)
-    criterion = metrics.loss_ncc
+    criterion = vl_loss
     # writer.add_graph(net,next(dataset_gen))
     # writer.close()
     running_loss = 0.0
@@ -103,10 +111,10 @@ if __name__ == "__main__":
     win_path = r"D:/"
     sys_path = linux_path
     train(
-        atlas_path=os.path.join(sys_path, "head-neck-reg-small/ct/HN-CHUM-007.nii.gz"),
-        train_dir=os.path.join(sys_path, "head-neck-reg-small/ct"),
-        save_dir=os.path.join(sys_path, "models/head-neck-reg-small"),
-        sample_dir=os.path.join(sys_path, "models/head-neck-reg-small/samples"),
+        atlas_path=os.path.join(sys_path, "head-neck-ordered/ct/HN-HGJ-077.nii.gz"),
+        train_dir=os.path.join(sys_path, "head-neck-ordered"),
+        save_dir=os.path.join(sys_path, "models/head-neck-reg-small", time.strftime("%Y%m%d-%H%M%S")),
+        sample_dir=os.path.join(sys_path, "models/head-neck-reg-small/samples", time.strftime("%Y%m%d-%H%M%S")),
         tensorboard_dir=os.path.join(sys_path, "models/head-neck-reg-small/tensorboard_dir"),
         # load_checkout_path=os.path.join(sys_path, "models/head-neck-reg-small", "20191111-130805_epoch-40.pt")
     )

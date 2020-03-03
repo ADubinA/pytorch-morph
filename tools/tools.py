@@ -41,7 +41,7 @@ def save_model_string(save_dir, epoch):
 
 def save_sample_string(save_dir, epoch):
     path = save_string(save_dir, epoch)
-    return path + ".jpg"
+    return path + ".png"
 
 
 
