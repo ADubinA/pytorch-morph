@@ -1,25 +1,17 @@
+from typing import Any
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
+from torch.nn.modules.module import T_co
+
 import testing.debug_tools as debug_tools
 import tools.tools as tools
 
 
-class Type1Module(nn.Module):
-    """
-    This is the Unet used by An Unsupervised Learning Model for
-    Deformable Medical Image Registration
-    http://openaccess.thecvf.com/content_cvpr_2018/papers/Balakrishnan_An_Unsupervised_Learning_CVPR_2018_paper.pdf
-    aka Voxelmorph1
-    """
-
-    def __init__(self, atlas, device=None):
-        super().__init__()
-        self.atlas = atlas.to(device)
-        self.unit_gird = tools.create_unit_grid(atlas.shape[2:]).to(device)
-
+class LocalizationNet(nn.Module):
 
     @staticmethod
     def single_conv(in_channels, out_channels):
@@ -30,9 +22,10 @@ class Type1Module(nn.Module):
             nn.ReLU(inplace=False)
         )
 
-class GridSTN(Type1Module):
-    def __init__(self, atlas, device=None):
-        super().__init__(atlas,device)
+class UnetLocalizationNet(LocalizationNet):
+
+    def __init__(self) -> None:
+        super().__init__()
         self.conv_layer_down1 = self.single_conv(1, 16)
         self.conv_layer_down2 = self.single_conv(16, 32)
         self.conv_layer_down31 = self.single_conv(32, 32)
@@ -58,31 +51,28 @@ class GridSTN(Type1Module):
         # 1: from 2 to 16 of scale 1
         conv1 = self.conv_layer_down1(x)
         x = self.maxpool(conv1)
-        conv1 = conv1[1:,...]  # remove atlas so skip connection will work proper
-
+        conv1 = conv1[1:, ...]  # remove atlas so skip connection will work proper
 
         # 2: from 16 to 32 of scale 1/2
         conv2 = self.conv_layer_down2(x)
         x = self.maxpool(conv2)
-        conv2 = conv2[1:,...]  # remove atlas so skip connection will work proper
-
+        conv2 = conv2[1:, ...]  # remove atlas so skip connection will work proper
 
         # 3: from 32 to 32 of scale 1/4
         conv3 = self.conv_layer_down31(x)
         x = self.maxpool(conv3)
-        conv3 = conv3[1:,...]  # remove atlas so skip connection will work proper
-
+        conv3 = conv3[1:, ...]  # remove atlas so skip connection will work proper
 
         # # # 4: from 32 to 32 of scale 1/8
         conv4 = self.conv_layer_down32(x)
         # x = self.maxpool(conv4)
-        conv4 = conv4[1:,...]  # remove atlas so skip connection will work proper
+        conv4 = conv4[1:, ...]  # remove atlas so skip connection will work proper
 
         # 5: from 32 to 32 of scale 1/16 ---- middle layer
         x = self.conv_layer_down33(x)
 
         # add course atlas to course batch
-        x = x[1:,...] + x[0]
+        x = x[1:, ...] + x[0]
 
         # # # 6: from 32+32 to 32 of scale 1/8
         # x = self.upsample(x)
@@ -108,12 +98,43 @@ class GridSTN(Type1Module):
 
         # 11: from 8+8 to 3 of scale 1
         x = torch.cat((x, conv1), dim=1)
-        out = self.conv_layer_up3(x)
-        out = 2 * torch.sigmoid(out) - 1
-        vector_map = out.permute(0,2,3,4,1) + self.unit_gird
+        x = self.conv_layer_up3(x)
+        out = 2 * torch.sigmoid(x) - 1
+        return out
+
+class AffineLocalizationNet(LocalizationNet):
+
+    def __init__(self) -> None:
+        super().__init__()
 
 
-        warped_image = F.grid_sample(input=original_image, grid=vector_map, padding_mode="reflection")
+
+class Type1Module(nn.Module):
+    """
+    This is the Unet used by An Unsupervised Learning Model for
+    Deformable Medical Image Registration
+    http://openaccess.thecvf.com/content_cvpr_2018/papers/Balakrishnan_An_Unsupervised_Learning_CVPR_2018_paper.pdf
+    aka Voxelmorph1
+    """
+
+    def __init__(self, atlas, device=None):
+        super().__init__()
+        self.localization_net = nn.Module
+        self.atlas = atlas.to(device)
+        self.unit_gird = tools.create_unit_grid(atlas.shape[2:]).to(device)
+
+
+
+class GridSTN(Type1Module):
+    def __init__(self, atlas, device=None):
+        super().__init__(atlas, device)
+        self.localization_net = UnetLocalizationNet()
+
+    def forward(self, original_image):
+
+        vector_map = self.localization_net(original_image)
+        grid = vector_map.permute(0, 2, 3, 4, 1) + self.unit_gird
+        warped_image = F.grid_sample(input=original_image, grid=grid, padding_mode="reflection")
         return warped_image, vector_map
 
 class AffineSTN(Type1Module):

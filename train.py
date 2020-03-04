@@ -10,10 +10,6 @@ import visualize
 from tensorboardX import SummaryWriter
 import torch.functional as F
 
-import random
-import testing.testing_torch
-# def test(atlas_path, test_dir, sample_dir=None, load_checkout_path=None, batch_size=1):
-
 def test_model(model, atlas_name, test_path,  load_checkout_path=None):
     labels_for_testing = ["mask_BODY", "Brainstem", "Eye_(L)", "Brain"]
     result_dict = {label : [] for label in labels_for_testing}
