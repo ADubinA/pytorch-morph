@@ -5,7 +5,13 @@ import torch
 from torch.autograd import Variable
 import pydicom
 import skimage.transform
+import torch.nn.functional as F
 
+
+def preprocessing_image(tensor_image):
+    tensor_image = 0.001 * tensor_image
+    tensor_image = F.interpolate(tensor_image, scale_factor=[0.25,0.25,0.5])
+    return tensor_image
 
 def load_file(path, dict_key="arr_0"):
     """
@@ -47,11 +53,11 @@ def load_file_for_stn(path, load_type="volume"):
         data = data[:, ::-1, :]
     numpy_file = data[np.newaxis, np.newaxis, :, :, :80]
     numpy_file = numpy_file.copy()
-    numpy_file = skimage.transform.rescale(numpy_file, (1, 1,
-                                                        0.5, 0.5, 0.5))
-    numpy_file = numpy_file * 0.001
-    return torch.from_numpy(numpy_file).float()
-
+    # numpy_file = skimage.transform.rescale(numpy_file, (1, 1,
+    #                                                     0.5, 0.5, 0.5))
+    tensor_image = torch.from_numpy(numpy_file).float()
+    tensor_image = preprocessing_image(tensor_image)
+    return tensor_image
 
 # def dataset_generator(paths, batch_size=1):
 #     while True:

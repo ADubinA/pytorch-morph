@@ -33,9 +33,9 @@ def test_model(model, atlas_name, test_path,  load_checkout_path=None):
     return result_dict
 
 
-def train(atlas_path, train_dir, save_dir, sample_dir=None,tensorboard_dir=None, load_checkout_path=None,
+def train(atlas_name, train_dir, save_dir, sample_dir=None,tensorboard_dir=None, load_checkout_path=None,
           images_per_epoch=10, epochs=100, learning_rate=0.001, batch_size=1,
-          save_interval=10, sample_interval=1):
+          save_interval=1, sample_interval=1):
 
     writer = SummaryWriter(os.path.join(tensorboard_dir, tools.save_string("",None)))
 
@@ -46,7 +46,7 @@ def train(atlas_path, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
     if tensorboard_dir is not None:
         tools.set_path(tensorboard_dir)
 
-    atlas = load_file_for_stn(atlas_path)
+    atlas = ct_pet_data_loader(train_dir, "ct", atlas_name)[0]
     net = Type1Module(atlas, "cuda:0")
     net.cuda()
     net.train()
@@ -55,7 +55,7 @@ def train(atlas_path, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
 
     dataset_gen = ct_pet_data_generator(train_dir, "train")
     optimizer = optim.Adam(net.parameters(), lr=learning_rate)
-    criterion = vl_loss
+    criterion = MSE_loss
     # writer.add_graph(net,next(dataset_gen))
     # writer.close()
     running_loss = 0.0
@@ -79,20 +79,20 @@ def train(atlas_path, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
             optimizer.step()
             # debug_tools.plot_grad_flow(net.named_parameters())
             # print statistics
-            running_loss += loss.item()
+            running_loss += loss.data[0]
 
             print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, loss.item()))
 
         # sample after after save_interval epochs
         if epoch % sample_interval == 0:
 
-            for n, p in net.named_parameters():
-                if p.requires_grad and "bias" not in n:
-                    writer.add_histogram("gradients in hidden layer {}".format(n), p.grad, global_step=epoch)
+            # for n, p in net.named_parameters():
+            #     if p.requires_grad and "bias" not in n:
+            #         writer.add_histogram("gradients in hidden layer {}".format(n), p.grad, global_step=epoch)
+            #
+            # writer.add_scalar("total loss",loss, global_step=epoch)
 
-            writer.add_scalar("total loss",loss, global_step=epoch)
-
-            visualize.create_result(atlas=atlas, original=batch_data[0],
+            visualize.create_3d_result(atlas=atlas, original=batch_data[0],
                                     vector_field=outputs[1][0],
                                     warped=outputs[0][0],
                                     save_location=tools.save_sample_string(sample_dir, epoch))
@@ -105,12 +105,12 @@ def train(atlas_path, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
 if __name__ == "__main__":
     linux_path = "/media/almog-lab/dataset/"
     win_path = r"D:/"
-    sys_path = linux_path
+    sys_path = win_path
     train(
-        atlas_path=os.path.join(sys_path, "head-neck-ordered/ct/HN-HGJ-077.nii.gz"),
-        train_dir=os.path.join(sys_path, "head-neck-ordered"),
-        save_dir=os.path.join(sys_path, "models/head-neck-reg-small", time.strftime("%Y%m%d-%H%M%S")),
-        sample_dir=os.path.join(sys_path, "models/head-neck-reg-small/samples", time.strftime("%Y%m%d-%H%M%S")),
+        atlas_name="HN-HGJ-077",
+        train_dir=os.path.join(sys_path, "head-neck-clean"),
+        save_dir=os.path.join(sys_path, "models/saves", time.strftime("%Y%m%d-%H%M%S")),
+        sample_dir=os.path.join(sys_path, "models/samples", time.strftime("%Y%m%d-%H%M%S")),
         tensorboard_dir=os.path.join(sys_path, "models/head-neck-reg-small/tensorboard_dir"),
         # load_checkout_path=os.path.join(sys_path, "models/head-neck-reg-small", "20191111-130805_epoch-40.pt")
     )

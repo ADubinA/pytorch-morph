@@ -3,6 +3,8 @@ import numpy as np
 # from multivol import MultiVolume
 # from multivol import get_translucent_cmap
 # from vispy import io, plot as vp
+import matplotlib
+
 import matplotlib.pyplot as plt
 from matplotlib.patheffects import withStroke
 import math
@@ -10,7 +12,7 @@ import math
 import tools.tools as tools
 from torch.nn.functional import grid_sample
 import torch
-import matplotlib
+import nibabel
 
 
 
@@ -157,6 +159,14 @@ def show_merge_2d(volume0, volume1,slice_dim=0 ,jump=1, vol_min=-float("inf"),vo
             ax[i,j].imshow(img)
     plt.show()
 
+def create_3d_result(atlas,original, warped, vector_field, save_location):
+    original = original[0, :, :, :].cpu().detach().numpy()
+    warped = warped[0, :, :, :].cpu().detach().numpy()
+    atlas = atlas[0, 0, :, :, :].cpu().detach().numpy()
+
+    nibabel.save(nibabel.Nifti1Image(original, affine=np.eye(4)), save_location.replace(".png", "_original.nii.gz"))
+    nibabel.save(nibabel.Nifti1Image(warped, affine=np.eye(4)), save_location.replace(".png", "_warped.nii.gz"))
+    nibabel.save(nibabel.Nifti1Image(atlas, affine=np.eye(4)), save_location.replace(".png", "_atlas.nii.gz"))
 
 def create_result(atlas,original, warped, vector_field, save_location):
 
@@ -195,12 +205,12 @@ def create_result(atlas,original, warped, vector_field, save_location):
 
     fig.savefig(save_location)
 
-    # vector_field = vector_field.cpu().detach().numpy()
-    # slicer = [slice(None)]*4
-    # slicer[dim] = slice_index
-    # vector_field = 1000*vector_field[slicer]
-    # im = axs[3].imshow(vector_field)
-    # plt.colorbar(im, ax=axs[3])
+    vector_field = vector_field.cpu().detach().numpy()
+    slicer = [slice(None)]*4
+    slicer[dim] = slice_index
+    vector_field = 1000*vector_field[slicer]
+    im = axs[3].imshow(vector_field)
+    plt.colorbar(im, ax=axs[3])
 
     matplotlib.use('Qt5Agg')
 
