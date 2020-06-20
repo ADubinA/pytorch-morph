@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from tools.tools import batch_duplication, create_unit_grid
+from tools.tools import batch_duplication, create_unit_grid, to_slice
 import autoencoder.voxelmorph_losses as vl
 import numpy as np
 import matplotlib.pyplot as plt
@@ -46,7 +46,25 @@ def loss_mse_with_grad(outputs, atlas, grad_coef=0.001, pixel_coef=1000):
     # normalize the loss by the batch size
     return loss / batch_size
 
-def MSE_loss(outputs, atlas):
+
+def mask_regularization(mask, image_shape):
+    relu = torch.nn.ReLU(True)
+    mask = mask[0] # TODO batch fixes
+    mask_size_loss = -(mask[1][0]-mask[0][0]) - (mask[1][1]-mask[0][1]) -(mask[1][2]-mask[0][2])
+
+    mask_offscreen_loss = relu(-mask).sum() +\
+                          relu(mask[:, 0] - image_shape[0]).sum() +\
+                          relu(mask[:, 1] - image_shape[1]).sum() +\
+                          relu(mask[:, 2] - image_shape[2]).sum()
+    print(mask)
+    return mask_size_loss + 10*mask_offscreen_loss
+
+def pixel_loss_with_masking(warped, mask, atlas):
+    slicing_square = to_slice(mask, atlas.shape[2:])
+    return count_loss(warped[slicing_square],atlas[slicing_square] )
+
+
+def MSE_loss(warped, atlas):
     """
     Calculate the Cross correlation loss, with added regularization of differentiability.
     from An Unsupervised Learning Model for Deformable Medical Image Registration
@@ -61,12 +79,18 @@ def MSE_loss(outputs, atlas):
     Returns (float):
         nn loss function
     """
-    atlas = batch_duplication(atlas, outputs[0].shape[0])
-    pixel_loss = nn.MSELoss()(outputs[0], atlas[0])
+    atlas = batch_duplication(atlas, warped.shape[0])
+    pixel_loss = ((atlas[0]+3.024)*(warped - atlas[0])**2).mean()
     # differential_loss =
     loss = pixel_loss[None,...]
     return loss
 
+def count_loss(warped, atlas):
+    atlas = batch_duplication(atlas, warped.shape[0])
+    pixel_loss = ((warped - atlas[0])**2).mean()
+    # differential_loss =
+    loss = pixel_loss[None,...]
+    return loss
 
 def vl_loss(outputs, atlas):
     volumes = outputs[0]
@@ -112,8 +136,8 @@ def grad(vector_fields):
     return gradiants
 
 def dice_loss(y_true, y_pred):
-    top = 2 * (y_true * y_pred, [1, 2, 3]).sum()
-    bottom = torch.max((y_true + y_pred, [1, 2, 3]).sum(), 50)
+    top = 2 * (y_true * y_pred).sum()
+    bottom = (y_true + y_pred).sum()
     dice = torch.mean(top / bottom)
     return -dice
 

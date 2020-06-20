@@ -4,6 +4,39 @@ import time
 import numpy as np
 import torch.nn.functional as F
 
+
+def slice_5d(min_slice, max_slice, image_size):
+    out_slice = []
+    out_slice.append(slice(None))
+    out_slice.append(slice(None))
+    out_slice.append(slice(max(min_slice[0], 0), min(max_slice[0], image_size[0])))
+    out_slice.append(slice(max(min_slice[1], 0), min(max_slice[1], image_size[1])))
+    out_slice.append(slice(max(min_slice[2], 0), min(max_slice[2], image_size[2])))
+    return out_slice
+
+
+def to_slice(x, image_size):
+    # TODO handle out of bounds?
+    # Todo handle int?
+    x = x[0] # TODO batch fixes
+    x = x.detach().cpu().numpy()
+    x[0] = np.floor(x[0])
+    x[1] = np.ceil(x[1])
+    x = x.astype(np.int)
+    return slice_5d(x[0],x[1], image_size)
+
+def random_image_slice(image, min_slice, max_slice, slice_size=np.array([40, 40, 20]) , default_color=None):
+    default_color = default_color or image[0,0,0,0,0]
+    # low_random_slice = np.array([20,20,5])
+    low_random_slice = np.random.randint(min_slice, max_slice, size=3)
+    high_random_slice = low_random_slice+slice_size
+    image_slice = slice_5d(low_random_slice, high_random_slice, image.shape[2:])
+    sliced_image = torch.zeros_like(image) + default_color
+    sliced_image[image_slice] = image[image_slice]
+    return sliced_image
+
+
+
 def batch_duplication(tensor, batch_size):
     # tensor = tensor.unsqueeze(0)
     return torch.stack(list(tensor for _ in range(batch_size)))
@@ -42,7 +75,6 @@ def save_model_string(save_dir, epoch):
 def save_sample_string(save_dir, epoch):
     path = save_string(save_dir, epoch)
     return path + ".png"
-
 
 
 def save_string(save_dir, epoch):

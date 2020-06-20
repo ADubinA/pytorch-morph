@@ -11,6 +11,7 @@ import torch.nn.functional as F
 def preprocessing_image(tensor_image):
     tensor_image = 0.001 * tensor_image
     tensor_image = F.interpolate(tensor_image, scale_factor=[0.25,0.25,0.5])
+    tensor_image[tensor_image != tensor_image[0,0,0,0,0]] = 1.0
     return tensor_image
 
 def load_file(path, dict_key="arr_0"):
@@ -102,7 +103,7 @@ def load_file_for_stn(path, load_type="volume"):
 
 
 def ct_pet_data_generator(folder_path, load_type, data_type="ct",
-                          load_labels=False, labels=[], batch_size=1, device=None):
+                          load_labels=False, labels=[], batch_size=1, device=None, load_specific_files=[]):
     """
     Data loader and generator for the dataset head neck pet ct
     :param data_type: "ct" or "pet"
@@ -110,6 +111,7 @@ def ct_pet_data_generator(folder_path, load_type, data_type="ct",
     :param load_labels (bool): if false, will not load any labels
     :param folder_path: path to the base folder containing ct, pet, struct folders
     :param load_type: "test" or "train"
+    :param load_specific_files - list of specific files to load
     :return: yield
     """
     assert (load_type == "train" or load_type == "test")
@@ -123,6 +125,9 @@ def ct_pet_data_generator(folder_path, load_type, data_type="ct",
     train_list = [os.path.split(image_path)[-1].split(".")[0] for image_path in images_path]
     train_list = [image_name for image_name in train_list if image_name not in test_list]
     selected_data_names = train_list if load_type == "train" else test_list
+
+    if not load_specific_files:
+        selected_data_names = load_specific_files
     sample_num = 0
     while True:
         if load_type == "test":
@@ -164,7 +169,7 @@ def ct_pet_data_loader(folder_path, data_type, sample_name, load_labels=False, l
                                                    sample_name, "*.nii.gz")))
     elif len(labels) > 0 and load_labels:
         for label in labels:
-            labels_paths.append(os.path.join(folder_path, "struct", sample_name, label + ".nii.gz"))
+            labels_paths.append(os.path.join(folder_path, "struct", sample_name,label + ".nii.gz"))
 
     for label_path in labels_paths:
         label = load_file_for_stn(label_path, load_type="label")

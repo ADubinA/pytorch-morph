@@ -10,12 +10,6 @@ import numpy as np
 import testing.debug_tools as debug_tools
 import tools.tools as tools
 
-class Masknet(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-
-# -Localization modules ------------------------------------------------------------------------------------------------
 class LocalizationNet(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -29,6 +23,45 @@ class LocalizationNet(nn.Module):
             # nn.Conv3d(out_channels, out_channels, kernel_size=3, padding=1),
             # nn.ReLU(inplace=False)
         )
+
+class MaskSquareNet(LocalizationNet):
+    def __init__(self, input_size) -> None:
+        super().__init__()
+
+        self.input_size = input_size
+        self.fc_size = self.input_size[0]*self.input_size[1]/4
+        self.fc_size = int(self.fc_size)
+        self.convnet = nn.Sequential(
+            self.single_conv(1, 16), self.maxpool,
+            self.single_conv(16, 32), self.maxpool,
+            self.single_conv(32, 32), self.maxpool,
+            self.single_conv(32, 32), self.maxpool,
+        )
+
+        self.fc_net = nn.Sequential(
+            nn.Linear(self.fc_size, 32),
+            nn.ReLU(True),
+            nn.Linear(32, 2*3)
+        )
+
+        # Initialize the weights/bias with identity transformation
+        self.fc_net[2].weight.data.zero_()
+        self.fc_net[2].bias.data.copy_(torch.tensor([self.input_size[0]/2-1, self.input_size[1]/2 - 1, self.input_size[2]/2 -1,
+                                                     self.input_size[0]/2, self.input_size[1]/2, self.input_size[2]/2],
+                                                    dtype=torch.float))
+
+    def forward(self, x):
+        x = self.convnet(x)
+        x = x.view(-1, self.fc_size)
+
+        mask = self.fc_net(x)
+        mask = mask.view(-1, 2, 3)
+
+        return mask[1:]
+
+
+# -Localization modules ------------------------------------------------------------------------------------------------
+
 
 class UnetLocalizationNet(LocalizationNet):
 
@@ -112,6 +145,8 @@ class AffineLocalizationNet(LocalizationNet):
     def __init__(self, fc_size) -> None:
         super().__init__()
 
+        self.only_translate = True
+
         self.fc_size = fc_size
 
         self.convnet = nn.Sequential(
@@ -141,6 +176,14 @@ class AffineLocalizationNet(LocalizationNet):
 
         theta = self.fc_net(x)
         theta = theta.view(-1, 3, 4)
+        theta = theta[1:] # remove atlas
+
+        if self.only_translate:
+            theta = torch.tensor([1, 0, 0, theta[0,0,3],
+                                  0, 1, 0, theta[0,1,3],
+                                  0, 0, 1, theta[0,2,3]], dtype=torch.float)
+            theta = theta.view(-1, 3, 4)
+            theta = theta.cuda()
 
         return theta
 
@@ -185,10 +228,11 @@ class AffineSTN(AbsSTN):
         # for 128*128: 32*16*4*2
         self.localization_net = AffineLocalizationNet(32*16*4*2)
 
-    def forward(self, x):
+    def forward(self, original_image):
+        x = torch.cat((self.atlas, original_image))
         theta = self.localization_net(x)
-        grid = F.affine_grid(theta, x.size())
-        warped_image = F.grid_sample(x, grid)
+        grid = F.affine_grid(theta, original_image.size())
+        warped_image = F.grid_sample(original_image, grid)
         return warped_image, grid
 
 
@@ -208,3 +252,25 @@ class Type1Module(nn.Module):
         # print(torch.cuda.memory_allocated())
 
         return x, grid
+
+
+class Type2Module(nn.Module):
+    def __init__(self, atlas, device=None):
+        super().__init__()
+        self.affine_stn = AffineSTN(atlas, device)
+        self.atlas = atlas
+        self.image_size = self.atlas.shape[2:]
+        self.masknet = Masknet(self.image_size)
+    def forward(self, original_image):
+        x = torch.cat((self.atlas, original_image))
+        masking_square = self.masknet(x)
+        slicing_square = tools.to_slice(masking_square, self.image_size)
+        self.affine_stn.atlas = torch.zeros_like(self.atlas)
+        self.affine_stn.atlas += self.atlas[0, 0, 0, 0, 0]  # TODO fix this to a fix value in the future
+        self.affine_stn.atlas[slicing_square] = self.atlas[slicing_square]
+
+        # x, affine_theta = self.affine_stn(original_image)
+        # x, affine_theta = self.affine_stn(x)
+
+        # return x, masking_square
+        return original_image, masking_square
