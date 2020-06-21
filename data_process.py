@@ -11,7 +11,7 @@ import torch.nn.functional as F
 def preprocessing_image(tensor_image):
     tensor_image = 0.001 * tensor_image
     tensor_image = F.interpolate(tensor_image, scale_factor=[0.25,0.25,0.5])
-    tensor_image[tensor_image != tensor_image[0,0,0,0,0]] = 1.0
+    # tensor_image[tensor_image != tensor_image[0,0,0,0,0]] = 1.0
     return tensor_image
 
 def load_file(path, dict_key="arr_0"):

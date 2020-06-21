@@ -47,7 +47,7 @@ def loss_mse_with_grad(outputs, atlas, grad_coef=0.001, pixel_coef=1000):
     return loss / batch_size
 
 
-def mask_regularization(mask, image_shape):
+def mask_square_regularization(mask, image_shape):
     relu = torch.nn.ReLU(True)
     mask = mask[0] # TODO batch fixes
     mask_size_loss = -(mask[1][0]-mask[0][0]) - (mask[1][1]-mask[0][1]) -(mask[1][2]-mask[0][2])
@@ -59,9 +59,18 @@ def mask_regularization(mask, image_shape):
     print(mask)
     return mask_size_loss + 10*mask_offscreen_loss
 
+def mask_affine_regularization(affine_map, image_shape):
+    # TODO batch fixes
+    relu = torch.nn.ReLU(True)
+
+    # try to make it large as possible
+    loss = ((1 - affine_map[:,0,0].sum())**2 + (1-affine_map[:,1,1].sum())**2 + (1-affine_map[:,2,2].sum())**2)
+    return loss
+
 def pixel_loss_with_masking(warped, mask, atlas):
-    slicing_square = to_slice(mask, atlas.shape[2:])
-    return count_loss(warped[slicing_square],atlas[slicing_square] )
+    # slicing_square = to_slice(mask, atlas.shape[2:])
+    # return count_loss(warped[slicing_square],atlas[slicing_square] )
+    return count_loss(warped, atlas)
 
 
 def MSE_loss(warped, atlas):
@@ -87,10 +96,10 @@ def MSE_loss(warped, atlas):
 
 def count_loss(warped, atlas):
     atlas = batch_duplication(atlas, warped.shape[0])
-    pixel_loss = ((warped - atlas[0])**2).mean()
+    pixel_loss = ((atlas[0]+3.024)*(warped - atlas[0])**2).sum()
     # differential_loss =
     loss = pixel_loss[None,...]
-    return loss
+    return loss*0.0001
 
 def vl_loss(outputs, atlas):
     volumes = outputs[0]

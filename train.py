@@ -101,10 +101,10 @@ def train(atlas_name, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
             # batch_data = batch_data.cuda()
             # batch_data = Variable(batch_data, requires_grad=True)
 
-            batch_data = tools.random_image_slice(batch_data, (0,0,0), (80,80,20))
+            batch_data = tools.random_image_slice(atlas, (0,0,0), (80,80,20))
             # ---------------------------------
             outputs = net(batch_data)
-            loss = criterion(outputs[0], outputs[1], net.atlas) #  + 0.00001*mask_regularization(outputs[1], net.atlas.shape[2:])
+            loss = criterion(outputs[0], outputs[1], net.atlas) + mask_affine_regularization(outputs[1], net.atlas.shape[2:])
             loss.backward()
             optimizer.step()
 
@@ -114,6 +114,7 @@ def train(atlas_name, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
             running_loss += loss.data[0]
 
             print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, loss.item()))
+            print(outputs[1])
 
         # sample after after save_interval epochs
         if epoch % sample_interval == 0:

@@ -1,4 +1,3 @@
-from typing import Any
 
 import torch
 import torch.nn as nn
@@ -6,9 +5,22 @@ import torch.nn.functional as F
 import torch.cuda
 from torch.autograd import Variable
 import numpy as np
-
-import testing.debug_tools as debug_tools
 import tools.tools as tools
+
+class AbsSTN(nn.Module):
+    """
+    This is the Unet used by An Unsupervised Learning Model for
+    Deformable Medical Image Registration
+    http://openaccess.thecvf.com/content_cvpr_2018/papers/Balakrishnan_An_Unsupervised_Learning_CVPR_2018_paper.pdf
+    aka Voxelmorph1
+    """
+
+    def __init__(self, atlas, device=None):
+        super().__init__()
+        self.device = device
+        self.localization_net = nn.Module
+        self.atlas = atlas.to(device)
+        self.unit_gird = tools.create_unit_grid(atlas.shape[2:]).to(device)
 
 class LocalizationNet(nn.Module):
     def __init__(self) -> None:
@@ -60,6 +72,80 @@ class MaskSquareNet(LocalizationNet):
         return mask[1:]
 
 
+class AffineMaskLocalizationNet(LocalizationNet):
+
+    def __init__(self, fc_size, device=None) -> None:
+        super().__init__()
+        self.affine_bias =  torch.tensor([1, 0, 0, 0,
+                                          0, 1, 0, 0,
+                                          0, 0, 1, 0], dtype=torch.float)
+        self.affine_form =  torch.tensor([1, 0, 0, 1,
+                                          0, 1, 0, 1,
+                                          0, 0, 1, 1], dtype=torch.float, device=device)
+
+        self.only_translate = True
+
+        self.fc_size = fc_size
+
+        self.convnet = nn.Sequential(
+            self.single_conv(1, 16), self.maxpool,
+            self.single_conv(16, 32), self.maxpool,
+            self.single_conv(32, 32), self.maxpool,
+            self.single_conv(32, 32), self.maxpool,
+            )
+
+        self.fc_net = nn.Sequential(
+            nn.Linear(self.fc_size, 32),
+            nn.ReLU(True),
+            nn.Linear(32, 4 * 3)
+        )
+
+        # Initialize the weights/bias with identity transformation
+        self.fc_net[2].weight.data.zero_()
+        self.fc_net[2].bias.data.copy_(self.affine_bias)
+
+
+    def forward(self, x):
+
+        x = self.convnet(x)
+        x = x.view(-1, self.fc_size)
+
+        theta = self.fc_net(x)
+
+        theta *= self.affine_form
+        theta = theta.view(-1, 3, 4)
+        theta = theta[1:] # remove atlas
+
+        theta[:, 0, 0] = nn.Sigmoid()(theta[:, 0, 0])
+        theta[:, 1, 1] = nn.Sigmoid()(theta[:, 1, 1])
+        theta[:, 2, 2] = nn.Sigmoid()(theta[:, 2, 2])
+
+        theta[:, 0, 3] = 4 * nn.Sigmoid()(theta[:, 0, 3]) - 2
+        theta[:, 1, 3] = 4 * nn.Sigmoid()(theta[:, 1, 3]) - 2
+        theta[:, 2, 3] = 4 * nn.Sigmoid()(theta[:, 2, 3]) - 2
+        # if self.only_translate:
+        #
+        #     theta = torch.tensor([theta[0,0,0], 0, 0, theta[0,0,3],
+        #                           0, theta[0,1,1], 0, theta[0,1,3],
+        #                           0, 0, theta[0,2,2], theta[0,2,3]], dtype=torch.float)
+        #     theta = theta.view(-1, 3, 4)
+        #     theta = theta.cuda()
+
+        return theta
+
+class AffineMaskSTN(AbsSTN):
+    def __init__(self, atlas, device=None):
+        super().__init__(atlas, device)
+        # for 255*255: 32*16*16*2
+        # for 128*128: 32*16*4*2
+        self.localization_net = AffineMaskLocalizationNet(32 * 16 * 4 * 2, device)
+
+    def forward(self, original_image):
+        x = torch.cat((self.atlas, original_image))
+        theta = self.localization_net(x)
+        grid = F.affine_grid(theta, original_image.size())
+        warped_image = F.grid_sample(original_image, grid, mode="bilinear")
+        return warped_image, grid, theta
 # -Localization modules ------------------------------------------------------------------------------------------------
 
 
@@ -192,19 +278,7 @@ class AffineLocalizationNet(LocalizationNet):
 # -STN modules----------------------------------------------------------------------------------------------------------
 
 
-class AbsSTN(nn.Module):
-    """
-    This is the Unet used by An Unsupervised Learning Model for
-    Deformable Medical Image Registration
-    http://openaccess.thecvf.com/content_cvpr_2018/papers/Balakrishnan_An_Unsupervised_Learning_CVPR_2018_paper.pdf
-    aka Voxelmorph1
-    """
 
-    def __init__(self, atlas, device=None):
-        super().__init__()
-        self.localization_net = nn.Module
-        self.atlas = atlas.to(device)
-        self.unit_gird = tools.create_unit_grid(atlas.shape[2:]).to(device)
 
 
 class GridSTN(AbsSTN):
@@ -257,20 +331,18 @@ class Type1Module(nn.Module):
 class Type2Module(nn.Module):
     def __init__(self, atlas, device=None):
         super().__init__()
+        self.device = device
         self.affine_stn = AffineSTN(atlas, device)
-        self.atlas = atlas
+        self.atlas = Variable(atlas,requires_grad=True)
         self.image_size = self.atlas.shape[2:]
-        self.masknet = Masknet(self.image_size)
+        self.masknet = AffineMaskSTN(atlas, device)
     def forward(self, original_image):
-        x = torch.cat((self.atlas, original_image))
-        masking_square = self.masknet(x)
-        slicing_square = tools.to_slice(masking_square, self.image_size)
-        self.affine_stn.atlas = torch.zeros_like(self.atlas)
-        self.affine_stn.atlas += self.atlas[0, 0, 0, 0, 0]  # TODO fix this to a fix value in the future
-        self.affine_stn.atlas[slicing_square] = self.atlas[slicing_square]
+        original_image = Variable(original_image,requires_grad=True)
+        warped_image, grid, theta = self.masknet(original_image)
+        self.affine_stn.atlas = F.grid_sample(self.atlas, grid, mode="bilinear")
 
         # x, affine_theta = self.affine_stn(original_image)
         # x, affine_theta = self.affine_stn(x)
 
         # return x, masking_square
-        return original_image, masking_square
+        return warped_image, theta
