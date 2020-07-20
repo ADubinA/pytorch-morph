@@ -31,8 +31,8 @@ def to_slice(x, image_size):
 
 def random_image_slice(image, min_slice, max_slice, slice_size=np.array([40, 40, 20]) , default_color=None):
     default_color = default_color or image[0,0,0,0,0]
-    low_random_slice = np.array([20,20,5])
-    # low_random_slice = np.random.randint(min_slice, max_slice, size=3)
+    # low_random_slice = np.array([20,20,5])
+    low_random_slice = np.random.randint(min_slice, max_slice, size=3)
     high_random_slice = low_random_slice+slice_size
     image_slice = slice_5d(low_random_slice, high_random_slice, image.shape[2:])
     sliced_image = torch.zeros_like(image) + default_color

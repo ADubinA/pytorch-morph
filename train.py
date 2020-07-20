@@ -61,7 +61,7 @@ def test_stn_model(model, atlas_name, test_path,  load_checkout_path=None):
 
 
 def train(atlas_name, train_dir, save_dir, sample_dir=None,tensorboard_dir=None, load_checkout_path=None,
-          images_per_epoch=15, epochs=10, learning_rate=0.001, batch_size=1,
+          images_per_epoch=15, epochs=20, learning_rate=0.001, batch_size=1,
           save_interval=1, sample_interval=1):
 
     writer = SummaryWriter(os.path.join(tensorboard_dir, tools.save_string("",None)))
@@ -104,7 +104,7 @@ def train(atlas_name, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
             batch_data = tools.random_image_slice(atlas, (0,0,0), (80,80,20))
             # ---------------------------------
             outputs = net(batch_data)
-            loss = criterion(outputs[0], outputs[1], net.atlas) + mask_affine_regularization(outputs[1], net.atlas.shape[2:])
+            loss = criterion(outputs[0], outputs[1], net.atlas) + 100*mask_affine_regularization(outputs[1], net.atlas.shape[2:])
             loss.backward()
             optimizer.step()
 

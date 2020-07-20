@@ -65,6 +65,7 @@ def mask_affine_regularization(affine_map, image_shape):
 
     # try to make it large as possible
     loss = ((1 - affine_map[:,0,0].sum())**2 + (1-affine_map[:,1,1].sum())**2 + (1-affine_map[:,2,2].sum())**2)
+    loss += ((affine_map[:,0,3].sum())**2 + (affine_map[:,1,3].sum())**2 + (affine_map[:,2,3].sum())**2)
     return loss
 
 def pixel_loss_with_masking(warped, mask, atlas):
