@@ -4,6 +4,27 @@ from tools.tools import batch_duplication, create_unit_grid, to_slice
 import autoencoder.voxelmorph_losses as vl
 import numpy as np
 import matplotlib.pyplot as plt
+
+
+class SoftHistogram(nn.Module):
+    def __init__(self, bins, min, max, sigma):
+        super(SoftHistogram, self).__init__()
+        self.bins = bins
+        self.min = min
+        self.max = max
+        self.sigma = sigma
+        self.delta = float(max - min) / float(bins)
+        self.centers = float(min) + self.delta * (torch.arange(bins).float() + 0.5)
+        self.centers = self.centers.cuda()
+
+    def forward(self, x):
+        x = x.flatten()
+        x = torch.unsqueeze(x, 0) - torch.unsqueeze(self.centers, 1)
+        x = torch.sigmoid(self.sigma * (x + self.delta/2)) - torch.sigmoid(self.sigma * (x - self.delta/2))
+        x = x.sum(dim=1)
+        return x
+
+
 def loss_mse_with_grad(outputs, atlas, grad_coef=0.001, pixel_coef=1000):
     """
     Calculate the Cross correlation loss, with added regularization of differentiability.
@@ -73,6 +94,10 @@ def pixel_loss_with_masking(warped, mask, atlas):
     # return count_loss(warped[slicing_square],atlas[slicing_square] )
     return count_loss(warped, atlas)
 
+def entropy_loss(image):
+    softhist = SoftHistogram(20,-3,3,0.2)
+    dist = softhist(image)[1:]
+    return dist # torch.distributions.Categorical(dist).entropy()
 
 def MSE_loss(warped, atlas):
     """

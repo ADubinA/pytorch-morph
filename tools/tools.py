@@ -29,7 +29,7 @@ def to_slice(x, image_size):
     x = x.astype(np.int)
     return slice_5d(x[0],x[1], image_size)
 
-def random_image_slice(image, min_slice, max_slice, slice_size=np.array([40, 40, 20]) , default_color=None):
+def random_image_slice(image, min_slice, max_slice, slice_size=np.array([80, 80, 40]) , default_color=None):
     default_color = default_color or image[0,0,0,0,0]
     # low_random_slice = np.array([20,20,5])
     low_random_slice = np.random.randint(min_slice, max_slice, size=3)
