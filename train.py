@@ -101,12 +101,10 @@ def train(atlas_name, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
             # batch_data = batch_data.cuda()
             # batch_data = Variable(batch_data, requires_grad=True)
 
-            batch_data = tools.random_image_slice(atlas, (0,0,0), (80,80,20))
+            # batch_data = tools.random_image_slice(atlas, (0,0,0), (80,80,20))
             # ---------------------------------
             outputs = net(batch_data)
             loss = criterion(outputs[0], outputs[1], net.atlas) + 0.0005*((entropy_loss(atlas)-entropy_loss(outputs[0])).mean())**2 #+ 100*mask_affine_regularization(outputs[1], net.atlas.shape[2:])
-            print(entropy_loss(atlas))
-            print(entropy_loss(outputs[0]))
             loss.backward()
             optimizer.step()
 
