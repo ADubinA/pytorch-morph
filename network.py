@@ -79,8 +79,8 @@ class AffineMaskLocalizationNet(LocalizationNet):
         self.affine_bias =  torch.tensor([1, 0, 0, 0,
                                           0, 1, 0, 0,
                                           0, 0, 1, 0], dtype=torch.float)
-        self.affine_form =  torch.tensor([1, 0, 0, 1,
-                                          0, 1, 0, 1,
+        self.affine_form =  torch.tensor([1, 0, 0, 0,
+                                          0, 1, 0, 0,
                                           0, 0, 1, 1], dtype=torch.float, device=device)
 
         self.only_translate = True
@@ -114,15 +114,15 @@ class AffineMaskLocalizationNet(LocalizationNet):
 
         theta *= self.affine_form
         theta = theta.view(-1, 3, 4)
-        theta = theta[1:] # remove atlas
+        # theta = theta[1:] # remove atlas
 
-        theta[:, 0, 0] = nn.Sigmoid()(theta[:, 0, 0])
-        theta[:, 1, 1] = nn.Sigmoid()(theta[:, 1, 1])
-        theta[:, 2, 2] = nn.Sigmoid()(theta[:, 2, 2])
-
-        theta[:, 0, 3] = 4 * nn.Sigmoid()(theta[:, 0, 3]) - 2
-        theta[:, 1, 3] = 4 * nn.Sigmoid()(theta[:, 1, 3]) - 2
-        theta[:, 2, 3] = 4 * nn.Sigmoid()(theta[:, 2, 3]) - 2
+        theta[:, 0, 0] = 1 # nn.Sigmoid()(theta[:, 0, 0])
+        theta[:, 1, 1] = 1 # nn.Sigmoid()(theta[:, 1, 1])
+        theta[:, 2, 2] = 1 # nn.Sigmoid()(theta[:, 2, 2])
+        #
+        theta[:, 0, 3] = 10 * nn.Sigmoid()(theta[:, 0, 3]) - 2
+        theta[:, 1, 3] = 10 * nn.Sigmoid()(theta[:, 1, 3]) - 2
+        theta[:, 2, 3] = 10 * nn.Sigmoid()(theta[:, 2, 3]) - 2
         # if self.only_translate:
         #
         #     theta = torch.tensor([theta[0,0,0], 0, 0, theta[0,0,3],
@@ -131,17 +131,17 @@ class AffineMaskLocalizationNet(LocalizationNet):
         #     theta = theta.view(-1, 3, 4)
         #     theta = theta.cuda()
 
-        return theta
+        return theta[:1,:,:]
 
 class AffineMaskSTN(AbsSTN):
     def __init__(self, atlas, device=None):
         super().__init__(atlas, device)
         # for 255*255: 32*16*16*2
         # for 128*128: 32*16*4*2
-        self.localization_net = AffineMaskLocalizationNet(32 * 16 * 4 * 2, device)
+        self.localization_net = AffineMaskLocalizationNet(4864, device)
 
     def forward(self, original_image):
-        x = torch.cat((self.atlas, original_image))
+        x = torch.cat((self.atlas, original_image), dim=4)
         theta = self.localization_net(x)
         grid = F.affine_grid(theta, original_image.size())
         warped_image = F.grid_sample(original_image, grid, mode="bilinear")
@@ -345,4 +345,4 @@ class Type2Module(nn.Module):
         # x, affine_theta = self.affine_stn(x)
 
         # return x, masking_square
-        return warped_image, theta
+        return original_image, theta

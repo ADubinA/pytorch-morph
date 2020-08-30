@@ -52,7 +52,7 @@ def load_file_for_stn(path, load_type="volume"):
     data = load_file(path)
     if load_type == "volume":
         data = data[:, ::-1, :]
-    numpy_file = data[np.newaxis, np.newaxis, :, :, :80]
+    numpy_file = data[np.newaxis, np.newaxis, :, :, :]
     numpy_file = numpy_file.copy()
     # numpy_file = skimage.transform.rescale(numpy_file, (1, 1,
     #                                                     0.5, 0.5, 0.5))

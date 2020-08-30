@@ -73,7 +73,9 @@ def train(atlas_name, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
     if tensorboard_dir is not None:
         tools.set_path(tensorboard_dir)
 
-    atlas = ct_pet_data_loader(train_dir, "ct", atlas_name)[0]
+    # atlas = ct_pet_data_loader(train_dir, "ct", atlas_name)[0]
+    atlas = load_file_for_stn(r"F:\dataset\atlas-f-arms-down.nii.gz")
+    atlas = atlas.to( "cuda:0")
     net = Type2Module(atlas, "cuda:0")
     net.cuda()
     net.train()
@@ -91,6 +93,8 @@ def train(atlas_name, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
         for i in range(images_per_epoch):
             optimizer.zero_grad()
             batch_data = next(dataset_gen)
+            batch_data[batch_data == batch_data[0, 0, 0, 0, 0]] = atlas[0, 0, 0, 0, 0]
+            batch_data= batch_data[:,:,:,:,:40]
             # batch_data = torch.tensor(skimage.transform.rescale(batch_data.detach().cpu().numpy(), (1, 1, 0.5, 0.5, 0.5)))
             # -------test ---------------------
 
@@ -104,7 +108,7 @@ def train(atlas_name, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
             # batch_data = tools.random_image_slice(atlas, (0,0,0), (80,80,20))
             # ---------------------------------
             outputs = net(batch_data)
-            loss = criterion(outputs[0], outputs[1], net.atlas) + 0.0005*((entropy_loss(atlas)-entropy_loss(outputs[0])).mean())**2 #+ 100*mask_affine_regularization(outputs[1], net.atlas.shape[2:])
+            loss = criterion(outputs[0], outputs[1], net.affine_stn.atlas) + 0.0005*((entropy_loss(atlas)-entropy_loss(net.affine_stn.atlas)).mean())**2 #+ 100*mask_affine_regularization(outputs[1], net.atlas.shape[2:])
             loss.backward()
             optimizer.step()
 
