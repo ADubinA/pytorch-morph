@@ -15,7 +15,7 @@ class SoftHistogram(nn.Module):
         self.sigma = sigma
         self.delta = float(max - min) / float(bins)
         self.centers = float(min) + self.delta * (torch.arange(bins).float() + 0.5)
-        self.centers = self.centers.cuda()
+        # self.centers = self.centers.cuda()
 
     def forward(self, x):
         x = x.flatten()
@@ -92,7 +92,7 @@ def mask_affine_regularization(affine_map, image_shape):
 def pixel_loss_with_masking(warped, mask, atlas):
     # slicing_square = to_slice(mask, atlas.shape[2:])
     # return count_loss(warped[slicing_square],atlas[slicing_square] )
-    return count_loss(warped, atlas)
+    return count_loss(warped, atlas[:,:,:,:,:40])
 
 def entropy_loss(image):
     softhist = SoftHistogram(20,-3,3,0.2)

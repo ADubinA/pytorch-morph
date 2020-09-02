@@ -126,7 +126,7 @@ def ct_pet_data_generator(folder_path, load_type, data_type="ct",
     train_list = [image_name for image_name in train_list if image_name not in test_list]
     selected_data_names = train_list if load_type == "train" else test_list
 
-    if not load_specific_files:
+    if load_specific_files:
         selected_data_names = load_specific_files
     sample_num = 0
     while True:

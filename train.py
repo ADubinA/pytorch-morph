@@ -9,7 +9,8 @@ from torch.autograd import Variable
 import visualize
 from tensorboardX import SummaryWriter
 import torch.functional as F
-
+device = "cpu"
+# device = "cuda:0"
 
 def test_mask_model(model, atlas_name, test_path,  load_checkout_path=None):
     labels_for_testing = ["mask_BODY", "mask_Brainstem", "mask_Brain"]
@@ -74,17 +75,16 @@ def train(atlas_name, train_dir, save_dir, sample_dir=None,tensorboard_dir=None,
         tools.set_path(tensorboard_dir)
 
     # atlas = ct_pet_data_loader(train_dir, "ct", atlas_name)[0]
-    atlas = load_file_for_stn(r"F:\dataset\atlas-f-arms-down.nii.gz")
-    atlas = atlas.to( "cuda:0")
-    net = Type2Module(atlas, "cuda:0")
-    net.cuda()
+    atlas = load_file_for_stn(r"C:\Users\alpha\Desktop\atlas-f-arms-down.nii.gz")
+    atlas = atlas.to(device)
+    net = Type2Module(atlas, device)
     net.train()
     if load_checkout_path is not None:
         net.load_state_dict(torch.load(load_checkout_path))
 
-    dataset_gen = ct_pet_data_generator(train_dir, "train", load_specific_files=['HN-HGJ-074'])
+    dataset_gen = ct_pet_data_generator(train_dir, "train") #, load_specific_files=['HN-HGJ-074'])
     optimizer = optim.Adam(net.parameters(), lr=learning_rate)
-    criterion = pixel_loss_with_masking
+    criterion = pixel_loss_witx h_masking
     # writer.add_graph(net,next(dataset_gen))
     # writer.close()
     running_loss = 0.0
