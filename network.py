@@ -139,7 +139,7 @@ class AffineMaskSTN(AbsSTN):
         # for 255*255: 32*16*16*2
         # for 128*128: 32*16*4*2
         self.localization_net = AffineMaskLocalizationNet(608*8*8, device)
-
+        self.localization_net.to(device)
     def forward(self, original_image):
         x = torch.cat((self.atlas, original_image), dim=4)
         theta = self.localization_net(x)

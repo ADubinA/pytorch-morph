@@ -7,15 +7,16 @@ import matplotlib.pyplot as plt
 
 
 class SoftHistogram(nn.Module):
-    def __init__(self, bins, min, max, sigma):
+    def __init__(self, bins, min, max, sigma, device="cuda:0"):
         super(SoftHistogram, self).__init__()
+        self.to(device)
         self.bins = bins
         self.min = min
         self.max = max
         self.sigma = sigma
         self.delta = float(max - min) / float(bins)
         self.centers = float(min) + self.delta * (torch.arange(bins).float() + 0.5)
-        # self.centers = self.centers.cuda()
+        self.centers = self.centers.cuda()
 
     def forward(self, x):
         x = x.flatten()
