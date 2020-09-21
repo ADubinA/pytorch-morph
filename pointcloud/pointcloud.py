@@ -1,9 +1,19 @@
 from scipy.interpolate import RegularGridInterpolator
 import numpy as np
 import open3d as o3d
-from emd_module import *
+# from emd_module import *
 import torch
-def volume_to_pointcloud(volume: np.ndarray, sample_num, intensity_range=None):
+from scipy.spatial.distance import cdist
+from scipy.optimize import linear_sum_assignment
+from scipy.ndimage import interpolation
+
+def emd_scipy(pcl1,pcl2):
+    d = cdist(pcl1, pcl2,'euclidean')
+    assignment = linear_sum_assignment(d)
+    return d[assignment].sum() / min(pcl1.shape[0], pcl2.shape[0])
+
+
+def volume_to_pointcloud(volume: np.ndarray, sample_num,color=None, intensity_range=None):
     """
     generates a pointcloud from a the given volume.
     Args:
@@ -31,29 +41,80 @@ def volume_to_pointcloud(volume: np.ndarray, sample_num, intensity_range=None):
 
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(locations[idx])
-    pcd.colors = o3d.utility.Vector3dVector(colors[idx])
+    if color is None:
+        pcd.colors = o3d.utility.Vector3dVector(colors[idx])
+    else:
+        pcd.paint_uniform_color(color)
     # o3d.visualization.draw_geometries([pcd])
 
-    # return pcd
-    return locations[idx].reshape(1,sample_num,3)
+    return pcd
+    # return locations[idx]
     # # generating interpolation function
     # x = np.linspace(0, volume.shape[0], 1)
     # y = np.linspace(0, volume.shape[1], 1)
     # z = np.linspace(0, volume.shape[2], 1)
     # interpolating_function = RegularGridInterpolator((x, y, z), volume)
 
-# def find_best_z_iterative(image,ref,stride=20):
-#     for i in range(0,ref.shape[3])
+def find_best_z_iterative(image,ref, stride=20):
+    moving_pcd = torch.from_numpy(volume_to_pointcloud(image, 8192, (300, 700)))
+    emd_m = emdModule().cpu()
+    best_z = 0
+    best_score = float("infinity")
+    for i in range(0, ref.shape[-1], stride):
+        ref_pcd = torch.from_numpy(volume_to_pointcloud(ref[:, :, i:i+stride], 8192, (300, 700)))
+        dis, ass = emd_m(moving_pcd, ref_pcd, 0.05, 3000)
+        score = np.sqrt(dis.cpu()).mean()
+
+        if score < best_score:
+            best_score = score
+            best_z = i
+
+    return best_z
+
+def find_best_z_cpu(image, ref, stride=20, window=60):
+    moving_pcd = volume_to_pointcloud(image, int(8192/4), intensity_range=(300, 700))
+    best_z = 0
+    best_score = float("infinity")
+    print("current best score is: " + str(best_score))
+    for i in range(0, ref.shape[-1], stride):
+        ref_pcd = volume_to_pointcloud(ref[:, :, i:i+window], int(8192/4),intensity_range= (300, 700))
+        score = emd_scipy(np.asarray(moving_pcd.points), np.asarray(ref_pcd.points))
+
+        if score < best_score:
+            best_score = score
+            best_z = i
+        print("current best score is: " + str(best_score) + " with z of " + str(best_z))
+
+    return best_z
 
 if "__main__" == __name__:
     from data_process import *
-    atlas = load_file(r"F:\dataset\atlas-f-arms-down.nii.gz")
+    reference = load_file(r"C:\Users\alpha\Desktop\atlas-f-arms-down.nii.gz")
+    # moving = load_file(r"C:\Users\alpha\Desktop\HN-CHUM-004.nii.gz")
+    angle = 30  # angle should be in degrees
+    moving = interpolation.rotate(reference[:,:,120:180], angle, reshape=False, prefilter=False)
+    reference_pcd = volume_to_pointcloud(reference, int(8192/4), [1,0,0], (300, 700),)
+    moving_pcd = volume_to_pointcloud(moving, int(8192/4), [0,1,0], (300, 700))
 
+
+    # best_z = find_best_z_cpu(moving,reference)
+    best_z = 120
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+    moving_pcd.points = o3d.utility.Vector3dVector(np.asarray(moving_pcd.points)+np.array([[0,0,best_z]]))
+    vis.add_geometry(reference_pcd)
+    vis.add_geometry(moving_pcd)
+    # while(True):
+        # transform geometry using ICP
+        # vis.poll_events()
+    vis.run()
+    # pcl_a = volume_to_pointcloud(reference[:,:,460:520], 8192, (300, 700)).reshape(-1,3)
+    # pcl_b = volume_to_pointcloud(moving, 8192, (300, 700)).reshape(-1,3)
+
+    # o3d.visualization.draw_geometries([pcl_a, pcl_b ])
+
+    # print(emd_scipy(pcl_a,pcl_b))
     # atlas = atlas.cpu().detach().numpy()[0,0,:,:,:]
-    atlas_pcd1 = torch.from_numpy(volume_to_pointcloud(atlas[:,:,100:150],8192,(300,700 )))
-    atlas_pcd2 = torch.from_numpy(volume_to_pointcloud(atlas[:,:,30:80],8192,(300,700 )))
+
 
     # o3d.visualization.draw_geometries([atlas_pcd])
-    emd_m = emdModule().cpu()
-    dis, ass = emd_m(atlas_pcd1, atlas_pcd2, 0.05, 3000)
-    print(np.sqrt(dis.cpu()).mean())
