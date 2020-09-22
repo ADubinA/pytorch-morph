@@ -6,6 +6,7 @@ import torch
 from scipy.spatial.distance import cdist
 from scipy.optimize import linear_sum_assignment
 from scipy.ndimage import interpolation
+import tqdm
 
 def emd_scipy(pcl1,pcl2):
     d = cdist(pcl1, pcl2,'euclidean')
@@ -33,9 +34,10 @@ def volume_to_pointcloud(volume: np.ndarray, sample_num,color=None, intensity_ra
     colors = np.tile(colors.reshape(-1,1),(1,3))
     colors += 1025
     colors /= 3000
-    assert colors.shape[0]>=sample_num,\
-        "wanted {} samples, but the filtered image has only {} values".format(sample_num,colors.shape[0])
 
+    if locations.shape[0] <= sample_num:
+        print("wanted {} samples, but the filtered image has only {} values".format(sample_num,colors.shape[0]))
+        return False
     # get only a few of them
     idx = np.random.randint(colors.shape[0], size=sample_num)
 
@@ -71,15 +73,17 @@ def find_best_z_iterative(image,ref, stride=20):
 
     return best_z
 
-def find_best_z_cpu(image, ref, stride=20, window=60):
+def find_best_z_cpu(image, ref, stride=10, window=8):
     moving_pcd = volume_to_pointcloud(image, int(8192/4), intensity_range=(300, 700))
     best_z = 0
     best_score = float("infinity")
     print("current best score is: " + str(best_score))
-    for i in range(0, ref.shape[-1], stride):
+    for i in tqdm.tqdm(range(0, ref.shape[-1], stride)):
         ref_pcd = volume_to_pointcloud(ref[:, :, i:i+window], int(8192/4),intensity_range= (300, 700))
-        score = emd_scipy(np.asarray(moving_pcd.points), np.asarray(ref_pcd.points))
+        if not ref_pcd:
+            continue
 
+        score = emd_scipy(np.asarray(moving_pcd.points), np.asarray(ref_pcd.points))
         if score < best_score:
             best_score = score
             best_z = i
@@ -89,25 +93,25 @@ def find_best_z_cpu(image, ref, stride=20, window=60):
 
 if "__main__" == __name__:
     from data_process import *
-    reference = load_file(r"C:\Users\alpha\Desktop\atlas-f-arms-down.nii.gz")
-    # moving = load_file(r"C:\Users\alpha\Desktop\HN-CHUM-004.nii.gz")
-    angle = 30  # angle should be in degrees
-    moving = interpolation.rotate(reference[:,:,120:180], angle, reshape=False, prefilter=False)
-    reference_pcd = volume_to_pointcloud(reference, int(8192/4), [1,0,0], (300, 700),)
-    moving_pcd = volume_to_pointcloud(moving, int(8192/4), [0,1,0], (300, 700))
+    reference = load_file(r"D:\head-neck-clean\ct\HN-CHUM-014.nii.gz")
+    moving = load_file(r"D:\head-neck-clean\ct\HN-CHUM-012.nii.gz")
+    # angle = 30  # angle should be in degrees
+    # moving = interpolation.rotate(reference[:,:,120:180], angle, reshape=False, prefilter=False)
+    reference_pcd = volume_to_pointcloud(reference[:,:,60:60+8], int(8192/2), [1,0,0], (300, 700),)
+    moving_pcd = volume_to_pointcloud(moving[:,:,60:60+8], int(8192/2), [0,1,0], (300, 700))
 
 
     # best_z = find_best_z_cpu(moving,reference)
-    best_z = 120
+    best_z = 0
     vis = o3d.visualization.Visualizer()
     vis.create_window()
     moving_pcd.points = o3d.utility.Vector3dVector(np.asarray(moving_pcd.points)+np.array([[0,0,best_z]]))
     vis.add_geometry(reference_pcd)
     vis.add_geometry(moving_pcd)
+    vis.run()
     # while(True):
         # transform geometry using ICP
         # vis.poll_events()
-    vis.run()
     # pcl_a = volume_to_pointcloud(reference[:,:,460:520], 8192, (300, 700)).reshape(-1,3)
     # pcl_b = volume_to_pointcloud(moving, 8192, (300, 700)).reshape(-1,3)
 
